@@ -1,7 +1,7 @@
 {
   "name": "workflow-objects",
   "version": "1.1.0",
-  "description": "Workflow element management for Obsidian - create, navigate, clean, and organize typed notes",
+  "description": "Create, navigate, clean, and organize metadata-classified notes with schema-aware frontmatter management for a typed object graph workflow.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

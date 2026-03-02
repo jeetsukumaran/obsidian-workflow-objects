@@ -3,7 +3,7 @@
 	"name": "Workflow Objects",
 	"version": "1.1.0",
 	"minAppVersion": "1.5.0",
-	"description": "Create, navigate, clean, and organize typed workflow notes with schema-aware frontmatter management.",
+	"description": "Create, navigate, clean, and organize metadata-classified notes with schema-aware frontmatter management for a typed object graph workflow.",
 	"author": "Jeet Sukumaran",
 	"authorUrl": "",
 	"isDesktopOnly": false

@@ -1,0 +1,147 @@
+/* Workflow Objects Plugin Styles */
+
+/* Confirmation modal message formatting */
+.workflow-objects-confirm-message {
+    white-space: pre-wrap;
+    margin-bottom: 1em;
+    padding: 0.5em;
+    background: var(--background-secondary);
+    border-radius: 4px;
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* ── Path and filename mapping lists ─────────────────────────────────────── */
+
+.path-mappings,
+.filename-mappings {
+    margin-top: 1em;
+}
+
+/* Each mapping row */
+.mapping-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+    padding: 4px 6px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: var(--background-secondary);
+    transition: background 80ms ease, border-color 80ms ease;
+    user-select: none;
+}
+
+/* Drag-over highlight */
+.mapping-row--drag-over {
+    border-color: var(--interactive-accent);
+    background: var(--background-modifier-hover);
+}
+
+/* Row being dragged */
+.mapping-row--dragging {
+    opacity: 0.45;
+}
+
+/* ── Drag handle ─────────────────────────────────────────────────────────── */
+
+.mapping-drag-handle {
+    cursor: grab;
+    color: var(--text-faint);
+    font-size: 1.1em;
+    line-height: 1;
+    padding: 0 2px;
+    flex-shrink: 0;
+}
+
+.mapping-drag-handle:hover {
+    color: var(--text-muted);
+}
+
+.mapping-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* ── Up / Down reorder buttons ───────────────────────────────────────────── */
+
+.mapping-reorder-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.mapping-reorder-btn {
+    padding: 1px 5px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    background: var(--background-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.75em;
+    line-height: 1.2;
+}
+
+.mapping-reorder-btn:hover:not([disabled]) {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.mapping-reorder-btn[disabled] {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ── Pattern / template text inputs ─────────────────────────────────────── */
+
+.mapping-row input[type="text"] {
+    flex: 1;
+    padding: 5px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    min-width: 0; /* prevent flex overflow */
+}
+
+/* ── Arrow separator ─────────────────────────────────────────────────────── */
+
+.mapping-arrow {
+    color: var(--text-faint);
+    flex-shrink: 0;
+    padding: 0 2px;
+}
+
+/* ── Remove button ───────────────────────────────────────────────────────── */
+
+.mapping-remove-btn {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    background: var(--background-modifier-error);
+    color: var(--text-on-accent);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.mapping-remove-btn:hover {
+    background: var(--background-modifier-error-hover);
+}
+
+/* ── Add mapping button ──────────────────────────────────────────────────── */
+
+.mapping-add-btn {
+    margin-top: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+}
+
+.mapping-add-btn:hover {
+    background: var(--background-modifier-hover);
+}

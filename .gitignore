@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+main.js
+*.js.map
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# npm
+npm-debug.log*
+
+# Data
+data.json

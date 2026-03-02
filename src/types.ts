@@ -14,7 +14,7 @@ export interface WorkflowObjectsSettings {
     wrapAround: boolean;
     /** Maximum title length for filenames */
     maxTitleLength: number;
-    /** Path mappings: [pattern, template][] 
+    /** Path mappings: [pattern, template][]
      * Templates support: $1, $2 for regex groups, {{title::first}} for first letter of title */
     pathMappings: [string, string][];
     /** Filename mappings: [pattern, template][]
@@ -160,7 +160,7 @@ export const DEFAULT_SETTINGS: WorkflowObjectsSettings = {
     defaultFieldSort: "schema",
     objectSortDirection: "desc",
     catalogDir: "",
-    catalogFilename: "catalog.{{content-type}}.base",
+    catalogFilename: "{{content-type}}.base",
     catalogRemapDisplayNames: true,
     catalogCtimeField: { enabled: true, displayName: "Date file created" },
     catalogMtimeField: { enabled: true, displayName: "Date file modified" },

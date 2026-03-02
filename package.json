@@ -1,6 +1,6 @@
 {
   "name": "workflow-objects",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Workflow element management for Obsidian - create, navigate, clean, and organize typed notes",
   "main": "main.js",
   "scripts": {

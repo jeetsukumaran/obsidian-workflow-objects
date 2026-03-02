@@ -1,10 +1,10 @@
 {
-  "id": "workflow-objects",
-  "name": "Workflow Objects",
-  "version": "1.0.0",
-  "minAppVersion": "1.5.0",
-  "description": "Create, navigate, clean, and organize typed workflow notes with schema-aware frontmatter management.",
-  "author": "Jeet Sukumaran",
-  "authorUrl": "",
-  "isDesktopOnly": false
+	"id": "workflow-objects",
+	"name": "Workflow Objects",
+	"version": "1.0.2",
+	"minAppVersion": "1.5.0",
+	"description": "Create, navigate, clean, and organize typed workflow notes with schema-aware frontmatter management.",
+	"author": "Jeet Sukumaran",
+	"authorUrl": "",
+	"isDesktopOnly": false
 }

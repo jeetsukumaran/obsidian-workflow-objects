@@ -10,10 +10,9 @@ set -euo pipefail
 #   and only tag (no bump, no commit).
 #
 # Pre-execute validation:
-# - package.json and manifest.json versions match
-# - versions.json contains an entry for that version (if versions.json exists)
-# - version follows Obsidian guideline: tag name == version, semver, no leading "v"
-# - tag with same name does not already exist (local or on origin)
+# - matching release numbers in manifest/package (and versions.json if present)
+# - release/tag follows Obsidian guidelines: tag == version, semver, no leading "v"
+# - tag of same name does not already exist (local or origin)
 
 usage() {
   cat <<'EOF'
@@ -21,27 +20,23 @@ Usage:
   ./release.sh [--version X.Y.Z] [--push]
 
 Options:
-  --version X.Y.Z   Target version to release (e.g., 1.0.2). If omitted, uses current versions.
+  --version X.Y.Z   Target version to release (e.g., 1.0.3). If omitted, uses current versions.
   --push            Push commit (if any) and tag to origin.
 
-Notes:
-  - Requires: node, npm, git
-  - Expects: package.json, manifest.json, version-bump.mjs
+Requires:
+  node, npm, git
+  package.json, manifest.json, version-bump.mjs
 EOF
 }
 
 die() { echo "ERROR: $*" >&2; exit 1; }
-
 have() { command -v "$1" >/dev/null 2>&1; }
 
 semver_ok() {
-  # Strict-ish semver: X.Y.Z with optional -prerelease and optional +build
   [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-][0-9A-Za-z\.-]+)?([+][0-9A-Za-z\.-]+)?$ ]]
 }
 
 json_get() {
-  # json_get <file> <js_expr_returning_value>
-  # Example: json_get package.json 'j.version'
   local file="$1"
   local expr="$2"
   node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('$file','utf8')); const v=(${expr}); if (v===undefined) process.exit(2); process.stdout.write(String(v));"
@@ -52,7 +47,6 @@ tag_exists_local() {
 }
 
 tag_exists_remote() {
-  # Returns 0 if tag exists on origin
   git ls-remote --tags origin "refs/tags/$1" | grep -q .
 }
 
@@ -91,44 +85,27 @@ have node || die "node not found"
 have npm  || die "npm not found"
 have git  || die "git not found"
 
-[[ -f package.json ]]  || die "package.json not found"
-[[ -f manifest.json ]] || die "manifest.json not found"
+[[ -f package.json ]]     || die "package.json not found"
+[[ -f manifest.json ]]    || die "manifest.json not found"
 [[ -f version-bump.mjs ]] || die "version-bump.mjs not found"
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not in a git repo"
 git remote get-url origin >/dev/null 2>&1 || die "git remote 'origin' not configured"
 
-# Read current versions
 PKG_VERSION="$(json_get package.json 'j.version')"
 MANIFEST_VERSION="$(json_get manifest.json 'j.version')"
 
-# Determine release version
 if [[ -n "$TARGET_VERSION" ]]; then
   REL_VERSION="$TARGET_VERSION"
 else
   REL_VERSION="$PKG_VERSION"
 fi
 
-# Obsidian guideline: tag name must equal version; also ensure no leading "v"
+# Obsidian guideline: tag == version; do not use v-prefix; use semver
 [[ "$REL_VERSION" != v* ]] || die "version/tag must not start with 'v' (got: $REL_VERSION)"
 semver_ok "$REL_VERSION" || die "version must be semver (X.Y.Z[-prerelease][+build]); got: $REL_VERSION"
 
-# Require package/manifest match *either* already (no --version) or after bump (with --version)
-if [[ -z "$TARGET_VERSION" ]]; then
-  [[ "$PKG_VERSION" == "$MANIFEST_VERSION" ]] || die "package.json version ($PKG_VERSION) != manifest.json version ($MANIFEST_VERSION)"
-else
-  # If user wants a bump, require the repo is clean before modifying files
-  ensure_clean_tree
-fi
-
-# If versions.json exists, validate it contains the release key (preflight for no-bump case;
-# post-update check will happen for bump case too).
-if [[ -f versions.json ]] && [[ -z "$TARGET_VERSION" ]]; then
-  VERSIONS_HAS_KEY="$(node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('versions.json','utf8')); process.exit(Object.prototype.hasOwnProperty.call(j,'$REL_VERSION')?0:1)")" \
-    || die "versions.json does not contain an entry for version $REL_VERSION"
-fi
-
-# Tag must not already exist (local or remote)
+# Tag must not exist (local or remote)
 if tag_exists_local "$REL_VERSION"; then
   die "tag already exists locally: $REL_VERSION"
 fi
@@ -136,11 +113,22 @@ if tag_exists_remote "$REL_VERSION"; then
   die "tag already exists on origin: $REL_VERSION"
 fi
 
-if [[ -n "$TARGET_VERSION" ]]; then
-  # Bump package.json (+ lockfile) WITHOUT tagging/committing
+if [[ -z "$TARGET_VERSION" ]]; then
+  # No bump: versions must already match and repo must be clean.
+  [[ "$PKG_VERSION" == "$MANIFEST_VERSION" ]] || die "package.json version ($PKG_VERSION) != manifest.json version ($MANIFEST_VERSION)"
+  if [[ -f versions.json ]]; then
+    node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('versions.json','utf8')); if(!Object.prototype.hasOwnProperty.call(j,'$REL_VERSION')){process.stderr.write('versions.json missing key $REL_VERSION\\n'); process.exit(1)}"
+  fi
+  ensure_clean_tree
+  git tag -a "$REL_VERSION" -m "$REL_VERSION"
+else
+  # Bump: require clean tree before modifying anything.
+  ensure_clean_tree
+
+  # Bump package.json (+ lockfile) WITHOUT commit/tag
   npm version "$REL_VERSION" --no-git-tag-version >/dev/null
 
-  # Run your bump script to update manifest.json/versions.json etc.
+  # Update manifest/versions via your script
   node version-bump.mjs
 
   # Post-bump validation: versions must match everywhere
@@ -153,27 +141,18 @@ if [[ -n "$TARGET_VERSION" ]]; then
     node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('versions.json','utf8')); if(!Object.prototype.hasOwnProperty.call(j,'$REL_VERSION')){process.stderr.write('versions.json missing key $REL_VERSION\\n'); process.exit(1)}"
   fi
 
-  # Stage and commit
-  git add package.json manifest.json versions.json package-lock.json 2>/dev/null || true
-  # If you have npm-shrinkwrap.json, include it if present and changed
-  [[ -f npm-shrinkwrap.json ]] && git add npm-shrinkwrap.json || true
+  # Stage final state of everything (avoids staged+unstaged split if version-bump also runs git add internally)
+  git add -A
 
   if git diff --cached --quiet; then
     die "nothing staged after bump; refusing to create a release commit"
   fi
 
   git commit -m "$REL_VERSION" >/dev/null
-
-  # Annotated tag (Obsidian expects tag == version)
-  git tag -a "$REL_VERSION" -m "$REL_VERSION"
-else
-  # No bump: require clean tree, then just tag current version
-  ensure_clean_tree
   git tag -a "$REL_VERSION" -m "$REL_VERSION"
 fi
 
 if [[ "$DO_PUSH" == "1" ]]; then
-  # Push commit only if we created one (i.e., in bump mode)
   if [[ -n "$TARGET_VERSION" ]]; then
     git push origin HEAD
   fi
@@ -184,4 +163,3 @@ echo "OK: created annotated tag $REL_VERSION"
 if [[ "$DO_PUSH" == "1" ]]; then
   echo "OK: pushed tag $REL_VERSION to origin"
 fi
-

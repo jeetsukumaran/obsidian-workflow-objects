@@ -3,7 +3,7 @@ import { App, Notice, WorkspaceLeaf } from "obsidian";
 /**
  * Clean workspace: close all tabs except one, collapse file explorer
  */
-export async function cleanWorkspace(app: App): Promise<void> {
+export function cleanWorkspace(app: App): void {
     const { workspace } = app;
 
     const leavesToClose: WorkspaceLeaf[] = [];
@@ -26,7 +26,7 @@ export async function cleanWorkspace(app: App): Promise<void> {
     // Collapse file explorer
     const fileExplorerLeaf = workspace.getLeavesOfType("file-explorer")[0];
     if (fileExplorerLeaf) {
-        const view = fileExplorerLeaf.view as any;
+        const view = fileExplorerLeaf.view as { tree?: { setCollapseAll?: (collapse: boolean) => void } };
         if (view?.tree?.setCollapseAll) {
             view.tree.setCollapseAll(true);
         }

@@ -545,6 +545,6 @@ export async function createWorkflowObjectCatalog(
         new Notice(`${replace ? "Replaced" : "Created"} catalog: ${fullPath}`);
     } catch (error) {
         console.error("Workflow Objects: Error creating catalog", error);
-        new Notice(`Error creating catalog: ${error}`);
+        new Notice(`Error creating catalog: ${error instanceof Error ? error.message : String(error)}`);
     }
 }

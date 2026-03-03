@@ -111,7 +111,7 @@ export async function createNewWorkflowObject(
         new Notice(`Created: ${pathInfo.fullPath}`);
     } catch (error) {
         console.error("Workflow Objects: Error creating workflow object", error);
-        new Notice(`Error creating workflow object: ${error}`);
+        new Notice(`Error creating workflow object: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
@@ -177,6 +177,6 @@ ${selected}`;
         new Notice(`Created: ${pathInfo.fullPath}`);
     } catch (error) {
         console.error("Workflow Objects: Error creating workflow object", error);
-        new Notice(`Error creating workflow object: ${error}`);
+        new Notice(`Error creating workflow object: ${error instanceof Error ? error.message : String(error)}`);
     }
 }

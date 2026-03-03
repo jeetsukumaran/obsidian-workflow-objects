@@ -151,7 +151,7 @@ export class VaultCurationModal extends Modal {
                         this.options.cleanMode = v as "standard" | "strict";
                     })
             );
-        cleanModeRow.settingEl.style.paddingLeft = "2em";
+        cleanModeRow.settingEl.setCssProps({ "padding-left": "2em" });
         cleanModeRow.settingEl.toggle(this.options.runClean);
 
         // Sort
@@ -177,7 +177,7 @@ export class VaultCurationModal extends Modal {
                         this.options.sortMode = v as "schema" | "alphabetical";
                     })
             );
-        sortModeRow.settingEl.style.paddingLeft = "2em";
+        sortModeRow.settingEl.setCssProps({ "padding-left": "2em" });
         sortModeRow.settingEl.toggle(this.options.runSort);
 
         // Reshelve

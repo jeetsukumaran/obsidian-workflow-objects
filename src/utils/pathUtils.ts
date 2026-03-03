@@ -65,7 +65,7 @@ function parseModifiers(raw: string): TemplateModifiers {
     for (const seg of raw.split("::")) {
         const colon = seg.indexOf(":");
         if (colon === -1) continue;
-        const key = seg.slice(0, colon).trim() as ConditionalType | string;
+        const key = seg.slice(0, colon).trim();
         const rest = seg.slice(colon + 1); // everything after the first ":"
         if (key === "prefix") mods.prefix = rest;
         else if (key === "suffix") mods.suffix = rest;
@@ -267,7 +267,9 @@ export function computeFilePath(
     // Build template context from frontmatter; coerce all values to strings
     const ctx: TemplateContext = {};
     for (const [k, v] of Object.entries(frontmatter)) {
-        ctx[k] = v != null ? String(v) : undefined;
+        ctx[k] = v != null
+            ? (typeof v === "object" ? JSON.stringify(v) : String(v))
+            : undefined;
     }
     // Ensure title is in context (may override frontmatter value if passed explicitly)
     if (title != null) ctx["title"] = title;

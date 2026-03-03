@@ -20,8 +20,9 @@ export class TypeService {
     ) {}
 
     /** Access the live Metadata Menu plugin instance (null if not installed) */
-    private getMmPlugin(): any {
-        return (this.app as any).plugins?.plugins?.["metadata-menu"] ?? null;
+    private getMmPlugin(): Record<string, unknown> | null {
+        const plugins = (this.app as unknown as { plugins?: { plugins?: Record<string, unknown> } }).plugins?.plugins;
+        return (plugins?.["metadata-menu"] as Record<string, unknown>) ?? null;
     }
 
     /**
@@ -32,7 +33,9 @@ export class TypeService {
         if (this.settings.fields.type) {
             return this.settings.fields.type;
         }
-        const mmAlias = this.getMmPlugin()?.settings?.fileClassAlias;
+        const mm = this.getMmPlugin();
+        const mmSettings = mm?.["settings"] as Record<string, unknown> | undefined;
+        const mmAlias = mmSettings?.["fileClassAlias"];
         return (typeof mmAlias === "string" && mmAlias) ? mmAlias : MM_DEFAULT_TYPE_ALIAS;
     }
 
@@ -41,11 +44,13 @@ export class TypeService {
      * Returns [] when MM is not installed or has no preset fields.
      */
     getPresetFields(): FieldDefinition[] {
-        const presets: unknown[] = this.getMmPlugin()?.settings?.presetFields;
+        const mm = this.getMmPlugin();
+        const mmSettings = mm?.["settings"] as Record<string, unknown> | undefined;
+        const presets: unknown = mmSettings?.["presetFields"];
         if (!Array.isArray(presets)) return [];
         return presets
             .filter((p): p is Record<string, unknown> =>
-                typeof p === "object" && p !== null && typeof (p as any).name === "string"
+                typeof p === "object" && p !== null && typeof (p as Record<string, unknown>).name === "string"
             )
             .map((p) => ({
                 id: typeof p.id === "string" ? p.id : undefined,
@@ -64,9 +69,10 @@ export class TypeService {
         if (this.settings.typesPath) {
             return this.settings.typesPath;
         }
-        const mmSettings = this.getMmPlugin()?.settings;
-        if (mmSettings?.classFilesPath) {
-            return mmSettings.classFilesPath.replace(/\/$/, "");
+        const mm = this.getMmPlugin();
+        const mmSettings = mm?.["settings"] as Record<string, unknown> | undefined;
+        if (mmSettings?.["classFilesPath"]) {
+            return (mmSettings["classFilesPath"] as string).replace(/\/$/, "");
         }
         return this.settings.typesPathFallback;
     }

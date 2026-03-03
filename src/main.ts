@@ -5,7 +5,6 @@ import { FrontmatterService } from "./services/FrontmatterService";
 import { WorkflowObjectsSettingTab } from "./SettingsTab";
 import {
     createNewWorkflowObject,
-    createNewWorkflowObjectSimple,
     navigateNext,
     navigatePrevious,
     openWorkflowObject,

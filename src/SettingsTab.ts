@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import WorkflowObjectsPlugin from "./main";
-import { WorkflowObjectsSettings, DEFAULT_SETTINGS } from "./types";
+import { DEFAULT_SETTINGS } from "./types";
 
 // ─── Shared template syntax description ───────────────────────────────────────
 
@@ -34,7 +34,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         // ── Type Definitions ──────────────────────────────────────────────────
-        containerEl.createEl("h2", { text: "Type definitions" });
+        new Setting(containerEl).setName("Type definitions").setHeading();
 
         new Setting(containerEl)
             .setName("Types path")
@@ -72,7 +72,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             );
 
         // ── Field Names ───────────────────────────────────────────────────────
-        containerEl.createEl("h2", { text: "Field names" });
+        new Setting(containerEl).setName("Field names").setHeading();
 
         const resolvedTypeField = this.plugin.typeService.getTypeFieldName();
         const typeFieldDesc = this.plugin.settings.fields.type
@@ -114,7 +114,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             );
 
         // ── Behaviour ─────────────────────────────────────────────────────────
-        containerEl.createEl("h2", { text: "Behaviour" });
+        new Setting(containerEl).setName("Behaviour").setHeading();
 
         new Setting(containerEl)
             .setName("Wrap around navigation")
@@ -229,7 +229,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             );
 
         // ── Object catalog defaults ───────────────────────────────────────────
-        containerEl.createEl("h2", { text: "Object catalog defaults" });
+        new Setting(containerEl).setName("Object catalog defaults").setHeading();
 
         const catalogDesc = containerEl.createEl("p", { cls: "setting-item-description" });
         catalogDesc.createEl("span", {
@@ -351,7 +351,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             );
 
         // ── Path Mappings ─────────────────────────────────────────────────────
-        containerEl.createEl("h2", { text: "Path mappings" });
+        new Setting(containerEl).setName("Path mappings").setHeading();
 
         const pathDesc = containerEl.createEl("p", { cls: "setting-item-description" });
         pathDesc.createEl("span", {
@@ -371,7 +371,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         this.renderPathMappings(mappingsContainer);
 
         // ── Filename Mappings ─────────────────────────────────────────────────
-        containerEl.createEl("h2", { text: "Filename mappings" });
+        new Setting(containerEl).setName("Filename mappings").setHeading();
 
         const filenameDesc = containerEl.createEl("p", { cls: "setting-item-description" });
         filenameDesc.createEl("span", {
@@ -474,7 +474,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 rowEl.removeClass("mapping-row--drag-over");
             });
 
-            rowEl.addEventListener("drop", async (e: DragEvent) => {
+            rowEl.addEventListener("drop", (e: DragEvent) => {
                 e.preventDefault();
                 rowEl.removeClass("mapping-row--drag-over");
                 if (dragSourceIndex === -1 || dragSourceIndex === i) return;
@@ -483,7 +483,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 const [moved] = mappings.splice(dragSourceIndex, 1);
                 mappings.splice(i, 0, moved);
                 dragSourceIndex = -1;
-                await onUpdate();
+                void onUpdate();
             });
 
             // ── Move up / Move down buttons ──────────────────────────────────
@@ -496,10 +496,10 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             upBtn.setAttr("aria-label", "Move up");
             upBtn.setAttr("title", "Move up");
             if (i === 0) upBtn.setAttr("disabled", "true");
-            upBtn.addEventListener("click", async () => {
+            upBtn.addEventListener("click", () => {
                 if (i === 0) return;
                 [mappings[i - 1], mappings[i]] = [mappings[i], mappings[i - 1]];
-                await onUpdate();
+                void onUpdate();
             });
 
             const downBtn = reorderGroup.createEl("button", {
@@ -509,10 +509,10 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             downBtn.setAttr("aria-label", "Move down");
             downBtn.setAttr("title", "Move down");
             if (i === mappings.length - 1) downBtn.setAttr("disabled", "true");
-            downBtn.addEventListener("click", async () => {
+            downBtn.addEventListener("click", () => {
                 if (i === mappings.length - 1) return;
                 [mappings[i], mappings[i + 1]] = [mappings[i + 1], mappings[i]];
-                await onUpdate();
+                void onUpdate();
             });
 
             // ── Pattern input ────────────────────────────────────────────────
@@ -521,9 +521,9 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 value: pattern,
                 placeholder: patternPh,
             });
-            patternInput.addEventListener("change", async () => {
+            patternInput.addEventListener("change", () => {
                 mappings[i][0] = patternInput.value;
-                await this.plugin.saveSettings();
+                void this.plugin.saveSettings();
             });
 
             rowEl.createSpan({ text: "→", cls: "mapping-arrow" });
@@ -534,9 +534,9 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 value: template,
                 placeholder: templatePh,
             });
-            templateInput.addEventListener("change", async () => {
+            templateInput.addEventListener("change", () => {
                 mappings[i][1] = templateInput.value;
-                await this.plugin.saveSettings();
+                void this.plugin.saveSettings();
             });
 
             // ── Remove button ────────────────────────────────────────────────
@@ -546,9 +546,9 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             });
             removeBtn.setAttr("aria-label", "Remove mapping");
             removeBtn.setAttr("title", "Remove");
-            removeBtn.addEventListener("click", async () => {
+            removeBtn.addEventListener("click", () => {
                 mappings.splice(i, 1);
-                await onUpdate();
+                void onUpdate();
             });
         }
 
@@ -557,9 +557,9 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             cls: "mapping-add-btn",
             text: "Add mapping",
         });
-        addBtn.addEventListener("click", async () => {
+        addBtn.addEventListener("click", () => {
             mappings.push(defaultRow());
-            await onUpdate();
+            void onUpdate();
         });
     }
 

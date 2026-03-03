@@ -101,7 +101,7 @@ export function isEmptyValue(v: unknown): boolean {
     if (
         typeof v === "object" &&
         !Array.isArray(v) &&
-        Object.keys(v as object).length === 0
+        Object.keys(v).length === 0
     )
         return true;
     return false;
@@ -122,12 +122,12 @@ export function formatYamlValue(value: unknown): string {
         );
     }
     if (typeof value === "string") {
-        if (/[:\[\]{}#&*!|>'"%@`]/.test(value) || value.includes("\n")) {
+        if (/[:[\]{}#&*!|>'"%@`]/.test(value) || value.includes("\n")) {
             return `"${value.replace(/"/g, '\\"')}"`;
         }
         return value;
     }
-    return String(value);
+    return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
 /**
@@ -142,7 +142,9 @@ export function formatValueForDisplay(value: unknown): string {
         return `[${value.slice(0, 3).join(", ")}, ... (${value.length} items)]`;
     }
     if (typeof value === "object") return JSON.stringify(value);
-    const str = String(value);
+    const str = typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? String(value)
+        : JSON.stringify(value);
     if (str.length > 50) return str.slice(0, 47) + "...";
     return str;
 }

@@ -195,7 +195,7 @@ class CreateCatalogModal extends Modal {
             .setDesc("Folder path where the .base file will be created. Created if it does not exist.")
             .addText((text) => {
                 text.setValue(this.options.dir)
-                    .setPlaceholder("catalogs/my-type")
+                    .setPlaceholder("E.g., 'catalogs/'.")
                     .onChange((v) => { this.options.dir = v.trim(); });
             });
 
@@ -205,7 +205,7 @@ class CreateCatalogModal extends Modal {
             .setDesc("Filename for the .base file (include the .base extension).")
             .addText((text) => {
                 text.setValue(this.options.filename)
-                    .setPlaceholder("catalog.my-type.base")
+                    .setPlaceholder("E.g., '{{content-type}}.base'.")
                     .onChange((v) => { this.options.filename = v.trim(); });
             });
 
@@ -347,7 +347,7 @@ class CollisionModal extends Modal {
         new Setting(contentEl)
             .setName("New filename")
             .setDesc(
-                "Edit below then click Rename, or choose Replace / Cancel."
+                "Edit below then select action."
             )
             .addText((text) => {
                 text.setValue(newFilename)

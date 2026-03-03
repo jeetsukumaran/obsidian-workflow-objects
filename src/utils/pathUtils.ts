@@ -267,9 +267,13 @@ export function computeFilePath(
     // Build template context from frontmatter; coerce all values to strings
     const ctx: TemplateContext = {};
     for (const [k, v] of Object.entries(frontmatter)) {
-        ctx[k] = v != null
-            ? (typeof v === "object" ? JSON.stringify(v) : String(v))
-            : undefined;
+        if (v === null || v === undefined) {
+            ctx[k] = undefined;
+        } else if (typeof v === "object") {
+            ctx[k] = JSON.stringify(v);
+        } else {
+            ctx[k] = String(v);
+        }
     }
     // Ensure title is in context (may override frontmatter value if passed explicitly)
     if (title != null) ctx["title"] = title;

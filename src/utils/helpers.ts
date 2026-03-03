@@ -127,7 +127,9 @@ export function formatYamlValue(value: unknown): string {
         }
         return value;
     }
-    return typeof value === "object" ? JSON.stringify(value) : String(value);
+    return (value !== null && typeof value === "object")
+        ? JSON.stringify(value)
+        : String(value);
 }
 
 /**

@@ -71,12 +71,15 @@ export async function createNewWorkflowObject(
         const sortedEntries = sortEntries(entries, fieldOrder, settings.defaultFieldSort);
 
         // Build YAML
-        const yamlLines = sortedEntries.map(([key, value]) => {
-            if (key === settings.fields.title) {
-                return `${key}: ${value}`;
-            }
-            return `${key}: ${formatYamlValue(value)}`;
-        });
+        // const yamlLines = sortedEntries.map(([key, value]) => {
+        //     if (key === settings.fields.title) {
+        //         return `${key}: ${formatYamlValue(value)}`;  // route through the same formatter
+        //     }
+        //     return `${key}: ${formatYamlValue(value)}`;
+        // });
+        const yamlLines = sortedEntries.map(([key, value]) =>
+            `${key}: ${formatYamlValue(value)}`
+        );
 
         const selected = getSelection(app);
         const content = `---\n${yamlLines.join("\n")}\n---\n${selected}`;

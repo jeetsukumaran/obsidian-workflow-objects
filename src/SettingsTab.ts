@@ -46,7 +46,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             )
             .addText((text) =>
                 text
-                    .setPlaceholder("(auto from Metadata Menu)")
+                    .setPlaceholder("(Following Metadata Menu settings)")
                     .setValue(this.plugin.settings.typesPath || "")
                     .onChange(async (value) => {
                         this.plugin.settings.typesPath = value || null;

@@ -271,8 +271,10 @@ export function computeFilePath(
             ctx[k] = undefined;
         } else if (typeof v === "object") {
             ctx[k] = JSON.stringify(v);
+        } else if (typeof v === "string") {
+            ctx[k] = v;
         } else {
-            ctx[k] = String(v);
+            ctx[k] = String(v as number | boolean | bigint | symbol);
         }
     }
     // Ensure title is in context (may override frontmatter value if passed explicitly)

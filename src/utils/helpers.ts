@@ -17,7 +17,7 @@ export function getActiveFileWithMeta(
         return null;
     }
     if (file.extension !== "md" && file.extension !== "qmd") {
-        new Notice("Only markdown files are supported");
+        new Notice("Unsupported file type");
         return null;
     }
     const frontmatter =
@@ -127,9 +127,16 @@ export function formatYamlValue(value: unknown): string {
         }
         return value;
     }
-    return (value !== null && typeof value === "object")
-        ? JSON.stringify(value)
-        : String(value);
+    // return (value !== null && typeof value === "object")
+    //     ? JSON.stringify(value)
+    //     : String(value);
+    if (value === null || value === undefined) {
+        return String(value);
+    }
+    if (typeof value === "object") {
+        return JSON.stringify(value);
+    }
+    return String(value);
 }
 
 /**

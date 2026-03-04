@@ -351,7 +351,7 @@ class CollisionModal extends Modal {
             )
             .addText((text) => {
                 text.setValue(newFilename)
-                    .setPlaceholder("catalog.my-type.base")
+                    .setPlaceholder("")
                     .onChange((v) => { newFilename = v.trim(); });
                 // Pre-select the text so the user can type immediately
                 window.setTimeout(() => {

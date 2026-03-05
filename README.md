@@ -1,197 +1,284 @@
 # Workflow Objects
 
-An Obsidian plugin for managing typed notes ("workflow objects") with schema-aware frontmatter, automatic file placement, and vault-wide curation.
+An Obsidian plugin for "typed object" note workflows.
 
-## Concepts
+This plugin serves to implement the metadata schemas associated with notes of particular file classes, as defined and managed using [Metadata Menu](https://github.com/mdelobelle/metadatamenu), to curate typed-note file names, locations, and frontmatter.
 
-A **workflow object** is any note that has a `type` frontmatter field whose value matches a type definition in your schema folder. The plugin reads type definitions from [Metadata Menu](https://github.com/mdelobelle/metadatamenu) class files (or from a plain folder of notes) and uses them to:
+---
 
-- scaffold new notes with the correct fields and defaults
-- enforce consistent field order and presence
-- derive the correct filename and vault path from the note's own metadata
-- navigate between objects of the same type
+<details>
+<summary><strong>Typed notes as objects</strong></summary>
+
+A typed note is an ordinary Markdown note that has a *type*.
+Corresponding to each specific note type are a set of specific properties, that are the *fields* of the "typed note object.
+A note of type `article` carries fields like `author`, `status`, and `rating`; a note of type `project` carries `deadline`, `team`, and `priority`.
+
+
+
+</details>
+
+---
+
+## Relationship to Metadata Menu
+
+Workflow Objects is designed as a **companion to [Metadata Menu](https://github.com/mdelobelle/metadatamenu)**. The two plugins divide responsibilities cleanly:
+
+| | Metadata Menu | Workflow Objects |
+|---|---|---|
+| **Role** | Schema manager | Note and frontmatter curator |
+| **Defines** | What each type of object *is* — its fields, their types, their defaults | Where objects *live*, how they are *named*, how their frontmatter is *kept consistent* |
+| **Manages** | Editing field values in-note via menus and forms | Creating, filing, sorting, cleaning, navigating, and cataloguing typed notes |
+
+Metadata Menu defines what an `article` object is — that is, a note with a metadata-defined schema of the `article` type: which fields it has, what types they are, what their defaults should be. Workflow Objects *implements* that definition across the vault: it creates new `article` objects (notes conforming to the `article` type schema) pre-populated with those fields, files them in the right folder with the right filename, keeps their frontmatter tidy as the schema evolves, lets you navigate sequentially between `article` objects, and generates an Obsidian Bases `.base` file that serves as a live catalog of every `article` object in the vault.
+
+Together, the two plugins transform a vault of loosely structured notes into a vault of typed objects — Metadata Menu as the schema manager, Workflow Objects as the curator that implements those schemas in practice.
+
+If Metadata Menu is installed, Workflow Objects auto-detects its type-field alias (`fileClass` by default) and reads type definitions directly from the Metadata Menu fileClass folder — no duplicate configuration needed. It can also operate without Metadata Menu, reading type definitions from any folder of notes you designate.
+
+---
+
+## Installation
+
+1. In Obsidian, open **Settings → Community plugins → Browse**.
+2. Search for **Workflow Objects** and install.
+3. Enable the plugin.
+
+**Manual installation:** download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/jeetsukumaran/obsidian-workflow-objects/releases/latest) and copy them to `.obsidian/plugins/workflow-objects/` inside your vault.
+
+---
+
+## Type definitions
+
+The plugin reads type schemas from a folder of Markdown notes. Each note's **filename** is the type name — `article.md` defines the `article` type, `project.md` defines the `project` type, and so on. The note's **frontmatter** carries the field schema in Metadata Menu's fileClass format:
+
+```yaml
+---
+fields:
+  - name: author
+    type: Input
+  - name: status
+    type: Select
+    options:
+      valuesList:
+        draft: ""
+        published: ""
+  - name: rating
+    type: Number
+---
+```
+
+If Metadata Menu is installed, this folder is read automatically from its settings. Otherwise, set **Types path** in the plugin settings.
+
+---
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| **Create new workflow object** | Choose a type, enter a title; the plugin scaffolds a new note with all schema fields populated to their defaults and places it at the correct path. |
-| **Navigate to next workflow object of same type** | Open the next note that shares the current note's type value, sorted by filename. |
-| **Navigate to previous workflow object of same type** | Open the previous note of the same type. |
-| **Open workflow object by type** | Two-step fuzzy finder: select a type, then select a note from all objects of that type. |
-| **Sort frontmatter** | Reorder the current note's frontmatter fields using the default sort mode (schema order or alphabetical, as configured). |
-| **Sort frontmatter (schema order)** | Sort fields to match the sequence defined in the type definition. |
-| **Sort frontmatter (alphabetical)** | Sort fields A–Z, ignoring the schema order. |
-| **Clean frontmatter (interactive)** | Opens a modal to choose a cleanup profile and previews what will change before applying. |
-| **Clean frontmatter (standard)** | Adds any missing schema fields with defaults; removes empty fields that are not in the schema. Defined fields are preserved even if empty. |
-| **Clean frontmatter (strict)** | Adds missing schema fields; removes any field not in the schema, including non-schema fields that have values. |
-| **Reshelve workflow object** | Move and rename the current note so its path and filename match what the mappings derive from its current metadata. Useful after editing the type or title. |
-| **Curate vault (clean / sort / reshelve)** | Batch operation across a configurable scope of files. Choose any combination of clean, sort, and reshelve, with options for directory, recursion, and include/exclude filters. |
-| **Clean workspace** | Close all editor tabs and collapse the file explorer. |
+All commands are available from the Command Palette (`Ctrl/Cmd+P`).
 
-## Frontmatter cleanup profiles
+---
 
-| Profile | Preserve schema fields (even if empty) | Remove non-schema fields | Add missing schema fields |
-|---|:---:|:---:|:---:|
-| Standard | ✓ | — | ✓ |
-| Strict | ✓ | ✓ | ✓ |
+### Create new workflow object
 
-The interactive command also exposes "sort only" and "remove all empty" modes.
+Prompts for a type, then a title. Creates a new typed note — that is, a new object of the chosen type — pre-populated with all fields defined in that type's schema (with their default values). The note is filed at the path and given the filename determined by your **path mappings** and **filename mappings** settings.
 
-## File placement: path and filename mappings
+---
 
-The plugin derives where a workflow object should live from its frontmatter. Two mapping tables control this: one for the folder path, one for the filename. Both use the same matching and template syntax.
+### Navigate to next / previous workflow object of same type
 
-### How matching works
+From any typed note (object), jumps to the next or previous note of the same type, sorted by filename. Wraps around at the boundary unless wrap-around navigation is disabled in settings.
 
-Each mapping is a `[pattern, template]` pair. The pattern is a regex matched against the note's type field value. The **first matching rule** wins. If no rule matches, the note goes to the vault root with a `YYYYMMDDTHHmm--title` filename.
+Useful for paging through all objects of a given type in sequence — all your `book` objects (notes of the `book` type), all your `project` objects, and so on.
 
-### Template syntax
+---
 
-Templates expand `{{field}}` placeholders using the full frontmatter of the note — any field, not just title. The reserved key `{{date}}` expands to the date prefix (`YYYYMMDDTHHmm`).
+### Open workflow object by type
 
-Modifiers are stacked inside `{{...}}` separated by `::`:
+Two-step picker: first choose a type, then choose a note from the list of all objects of that type (all notes whose type field matches). The list is sorted by filename, newest-first by default when filenames carry date prefixes.
 
-| Modifier | Effect |
-|---|---|
-| `::prefix:<str>` | Prepend `<str>` **only** when the field has a value |
-| `::suffix:<str>` | Append `<str>` **only** when the field has a value |
-| `::default:<str>` | Use `<str>` when the field is absent or empty |
+---
 
-When a field is absent and no `::default` is set, the entire token collapses to an empty string (silently dropped). This makes optional path segments straightforward:
+### Reshelve workflow object
 
-```
-# Folder template: type folder, with optional role sub-folder
-content/{{content-type}}{{production-role::prefix:/}}
+Moves and renames the active note to match its current frontmatter — applying your path and filename template settings to its type and title fields. Use this after changing a note's type or title, or after updating your path mapping rules, to bring the object into its correct location.
 
-# production-role = "editor"  →  content/article/editor
-# production-role absent       →  content/article
-```
+If the filename already encodes a date prefix (e.g. `20240315T0930--my-note.md`), that prefix is preserved unless the frontmatter contains a more authoritative date field (see *Date prefix source fields* in settings).
 
-Regex capture groups from the pattern are available as `$1`, `$2`, etc., substituted before `{{...}}` expansion:
+---
 
-```
-Pattern:  ^([^/]+)/(.+)$
-Template: archive/$1/$2/{{title}}
-```
+### Sort frontmatter
 
-### Example path mappings
+Reorders the active note's frontmatter fields using the default sort mode from settings (schema order or alphabetical). Equivalent to running *Sort frontmatter (schema order)* or *Sort frontmatter (alphabetical)* depending on your **Default field sort** setting.
 
-```
-Pattern          Template
-^article$        content/articles
-^(.+)$           content/$1
-```
+---
 
-### Example filename mappings
+### Sort frontmatter (schema order)
 
-```
-Pattern          Template
-^reference$      @{{title}}
-^log$            {{date}}
-^.*$             {{date}}--{{title}}
-```
+Reorders frontmatter fields to match the sequence defined in the type schema. Fields not present in the schema are moved to the end.
 
-Advanced examples using multiple modifiers:
+---
 
-```
-# Include section in filename only if the field exists
-{{date}}--{{section::suffix:--}}{{title}}
+### Sort frontmatter (alphabetical)
 
-# Role prefix with fallback, then date and title
-{{production-role::default:general}}--{{date}}--{{title}}
+Reorders frontmatter fields A–Z, regardless of schema.
 
-# Optional sub-folder segment using suffix
-content/{{content-type}}{{status::prefix:/::suffix:s}}
-# status = "draft"  →  content/article/drafts
-# status absent     →  content/article
-```
+---
 
-### Date prefix
+### Clean frontmatter (interactive)
 
-The date portion of a filename is determined in this order:
+Opens a menu of cleanup actions for the active typed note (object). Each action is a preset combination of three independent operations: adding fields missing from the schema, removing fields not present in the schema, and sorting the result.
 
-1. An existing date prefix already present in the filename (preserved on reshelve)
-2. The value of the first matching **date prefix source field** found in frontmatter
-3. The file's creation time
-4. The current time (for new objects)
+| Action | Adds missing fields | Removes undefined fields | Sort |
+|---|:---:|:---:|---|
+| Sort alphabetical | — | — | A–Z |
+| Sort following schema | — | — | Schema order |
+| Ensure schema (default sort) | ✓ | — | From settings |
+| Ensure schema (select sort…) | ✓ | — | Chosen interactively |
+| Enforce schema (default sort) | ✓ | ✓ | From settings |
+| Enforce schema (select sort…) | ✓ | ✓ | Chosen interactively |
+| Custom… | Chosen interactively | Chosen interactively | Chosen interactively |
 
-## Vault curation
+When an *enforce* action would delete fields that currently have values, the plugin shows a confirmation dialog listing exactly which fields and values would be lost before proceeding.
 
-The **Curate vault** command opens a modal with the following options:
+---
 
-- **Directory** — limit scope to a specific folder (empty = entire vault)
-- **Recursive** — include sub-folders
-- **Include / exclude pattern** — filter files by path using a regex
-- **Operations** — independently toggle clean, sort, and reshelve
-- **Clean mode** — standard or strict (see cleanup profiles above)
-- **Sort mode** — schema order or alphabetical
+### Clean frontmatter (standard)
 
-A summary notice reports how many files were cleaned, sorted, reshelved, and whether any errors occurred.
+Non-interactive *ensure*: adds any fields missing from the type schema and preserves all existing fields — including those not in the schema — using the default sort from settings. Safe to run on any typed note (object).
 
-## Metadata Menu integration
+---
 
-When Metadata Menu is installed the plugin automatically reads its class files and uses them as type definitions, providing:
+### Clean frontmatter (strict)
 
-- field names and types for scaffolding new objects
-- `fieldsOrder` for schema-order sorting
-- typed defaults (dates, selects, booleans) populated to the correct format
+Non-interactive *enforce*: adds missing fields **and removes** any fields not defined in the type schema, using the default sort from settings. Use with care — there is no confirmation dialog.
 
-If Metadata Menu is not installed, or you set a **Types path** in settings, the plugin reads type definitions from a plain folder of notes instead. Each note's filename becomes the type name; a `fields` frontmatter array defines the schema.
+---
+
+### Create new workflow object catalog
+
+Generates an [Obsidian Bases](https://obsidian.md/bases) `.base` file that serves as a live catalog or index of all objects of a chosen type — that is, all notes whose type field matches the chosen type.
+
+**Flow:**
+1. Choose a type from the suggester.
+2. Review or edit the destination directory and filename (pre-filled from your catalog settings).
+3. Click **Create**.
+
+The generated catalog (`.base` file) includes:
+
+- A filter that selects all notes of the chosen type (all objects whose type field equals the chosen value).
+- A **Title** column rendered as a clickable link using each object's title field.
+- One column per schema field. Fields of type `File` (linked notes — references to other objects) are rendered as titled links to the target object; all other fields are shown as raw property values.
+- Optional **Date created** and **Date modified** columns (controlled by settings).
+- Sentence-case display names for all columns (e.g. `workflow-effort` → `Workflow effort`), unless remapping is disabled.
+
+If a `.base` file already exists at the target path, a collision dialog offers three options: **Replace** (overwrite), **Rename** (enter a new filename), or **Cancel**.
+
+---
+
+### Curate vault (clean / sort / reshelve)
+
+Batch-applies any combination of clean, sort, and reshelve operations across a scoped set of notes. A configuration dialog lets you specify:
+
+**Scope**
+- **Directory** — vault-relative folder to operate on, with autocomplete. Leave blank for the vault root.
+- **Recursive** — whether to include notes in subdirectories.
+
+**Filters**
+- **Include pattern** — regex that file paths must match (e.g. `^projects/`). Leave blank to include all.
+- **Exclude pattern** — regex that file paths must not match (e.g. `^system/`). Leave blank to exclude none.
+
+**Operations** (enable any combination)
+- **Clean frontmatter** — standard (add missing, preserve everything else) or strict (add missing, remove undefined).
+- **Sort frontmatter** — schema order or alphabetical.
+- **Reshelve files** — move and rename each note to match its type and title.
+
+---
+
+### Clean workspace
+
+Closes all open tabs except one and collapses the file explorer. A quick reset to a clean working state.
+
+---
 
 ## Settings reference
 
 ### Type definitions
 
-| Setting | Description |
-|---|---|
-| **Types path** | Vault path to the folder of type-definition notes. Leave empty to auto-read from Metadata Menu. |
-| **Fallback types path** | Used when Metadata Menu is absent and Types path is not set. Default: `system/schema/content-types`. |
+| Setting | Description | Default |
+|---|---|---|
+| **Types path** | Vault path to the folder of type-definition notes. Each note defines one object type (one class of typed notes). Leave empty to auto-read from Metadata Menu. | *(auto)* |
+| **Fallback types path** | Path used when Metadata Menu is absent and no Types path is set. | `system/schema/content-types` |
 
 ### Field names
 
-| Setting | Description |
-|---|---|
-| **Type field** | Frontmatter field that classifies a note as a workflow object of a given type. Auto-detected from Metadata Menu; set manually to override. |
-| **Title field** | Frontmatter field used as the note's human-readable title and as `{{title}}` in templates. Default: `title`. |
+| Setting | Description | Default |
+|---|---|---|
+| **Type field** | Frontmatter field that records a note's object type. Auto-detected from Metadata Menu (`fileClass`) when left empty. | *(auto)* |
+| **Title field** | Frontmatter field used as the human-readable title of an object. Referenced as `{{ title }}` in path and filename templates. | `title` |
 
 ### Behaviour
 
-| Setting | Description |
-|---|---|
-| **Wrap around navigation** | Wrap from last to first object (and vice versa) when navigating within a type. |
-| **Default field sort** | Sort mode applied by the plain "Sort frontmatter" command: schema order or alphabetical. |
-| **Object list sort direction** | Order of the file list in navigation and open-by-type. Descending puts the most recently timestamped filenames first. |
-| **Maximum title length** | Characters taken from the title when building filenames. Titles are truncated before filesystem sanitisation. Default: 120. |
-| **Date format** | Moment.js format written into date-type fields on new objects. Default: `YYYY-MM-DDTHH:mm`. |
-| **Date prefix source fields** | Frontmatter fields checked (in order) to find the date for a filename prefix during reshelving. Falls back to file creation time. One per line. |
+| Setting | Description | Default |
+|---|---|---|
+| **Wrap around navigation** | When navigating past the last object of a type, wrap to the first (and vice versa). | On |
+| **Default field sort** | Sort order used by *Sort frontmatter* and the non-interactive clean commands. | Schema order |
+| **Object list sort direction** | Order for note lists in *Open by type* and navigation. Descending puts the most recent date-prefixed filenames first. | Descending |
+| **Maximum title length** | Maximum characters taken from the title field when constructing filenames. Longer titles are truncated at this limit. | `120` |
+| **Date format** | Moment.js format string for date fields written into new objects. | `YYYY-MM-DDTHH:mm` |
+| **Date prefix source fields** | Frontmatter fields checked (in order) for the date used in filename prefixes when reshelving. Falls back to file creation time. One field per line. | `date-indexed`, `date-created`, `created-date`, `created`, `date` |
+
+### Object catalog defaults
+
+Pre-filled defaults for the *Create new workflow object catalog* dialog, overridable at creation time.
+
+| Setting | Description | Default |
+|---|---|---|
+| **Catalog directory** | Vault folder for new `.base` catalog files. Use `{{ content-type }}` to insert the type name. Leave blank for vault root. | *(root)* |
+| **Catalog filename** | Filename template for new catalog files. | `{{ content-type }}.base` |
+| **Remap field names to display names** | Automatically convert schema field names to sentence-case column headers in catalogs. | On |
+| **Include "date created" column** | Add a `file.ctime` column to new catalogs, with configurable display name. | On / `Date file created` |
+| **Include "date modified" column** | Add a `file.mtime` column to new catalogs, with configurable display name. | On / `Date file modified` |
 
 ### Path mappings
 
-Regex → folder template rules. Evaluated top to bottom; first match wins. Templates support `$1`/`$2` regex capture groups and any `{{field}}` token with optional `::prefix`, `::suffix`, and `::default` modifiers.
+Controls which vault folder a typed note (object) is filed into, based on its type value. Each mapping is a **[regex pattern, LiquidJS template]** pair. The first pattern that matches the note's type value wins.
+
+Regex capture groups are available as `$1`, `$2`, etc. All frontmatter fields are available as template variables.
+
+**Examples**
+
+| Pattern | Template | Result for an `article` object |
+|---|---|---|
+| `^(.+)$` | `content/$1` | `content/article` |
+| `^(.+)$` | `{% if section %}{{ section }}/{% endif %}$1` | `projects/article` (when `section: projects`) |
+
+Mappings can be reordered by drag-and-drop. The default maps every type to `content/<type>`.
 
 ### Filename mappings
 
-Regex → filename template rules. Same evaluation model. `{{date}}` expands to the date prefix; all other `{{field}}` tokens expand from frontmatter with the same modifier support.
+Controls how typed notes (objects) are named, based on their type. Same **[regex pattern, LiquidJS template]** structure as path mappings. `{{ date }}` expands to a `YYYYMMDDTHHmm` timestamp; all frontmatter fields are available as variables.
 
-## Installation
+**Examples**
 
-### Manual
+| Pattern | Template | Result |
+|---|---|---|
+| `^.*$` | `{{ date }}--{{ title }}` | `20240315T0930--My Article` |
+| `^book$` | `{{ date }}--{{ author \| default: "unknown" }}--{{ title }}` | `20240315T0930--Borges--Labyrinths` |
+| `^log$` | `{{ date }}` | `20240315T0930` |
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the latest release.
-2. Create `.obsidian/plugins/workflow-objects/` inside your vault.
-3. Copy the three files into that folder.
-4. Enable the plugin under **Settings → Community plugins**.
+The full [LiquidJS template syntax](https://liquidjs.com/tutorials/intro-to-liquid.html) is available:
 
-### Development
-
-```bash
-git clone <repo>
-cd obsidian-workflow-objects
-npm install
-npm run dev
+```
+{{ field }}                                        — field value
+{{ field | default: "fallback" }}                  — fallback when field is absent
+{% if field %}/{{ field }}{% endif %}              — include only when present
+{% if flag %}archived/{% else %}live/{% endif %}   — conditional branch
+{% if tag %}[{{ tag }}]{% endif %}                 — surround value in brackets
 ```
 
-## License
+The default maps every type to `{{ date }}--{{ title }}`.
 
-MIT
+---
+
+## Acknowledgements
+
+Workflow Objects relies on [Metadata Menu](https://github.com/mdelobelle/metadatamenu) by mdelobelle for type schema definitions, and uses [LiquidJS](https://liquidjs.com) for path and filename templating.

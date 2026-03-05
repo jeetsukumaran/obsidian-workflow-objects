@@ -66,7 +66,8 @@ export type TemplateContext = Record<string, unknown>;
  * See https://liquidjs.com/tutorials/intro-to-liquid.html for full syntax.
  */
 export async function expandTemplate(template: string, ctx: TemplateContext): Promise<string> {
-    return liquidEngine.parseAndRender(template, ctx);
+    const result: string = await liquidEngine.parseAndRender(template, ctx);
+    return result;
 }
 
 // ─── Path / filename helpers ──────────────────────────────────────────────────
@@ -139,8 +140,9 @@ export async function buildFilenameFromPattern(
     maxTitleLength: number
 ): Promise<string> {
     const titleRaw = ctx["title"];
-    const sanitizedTitle = titleRaw
-        ? sanitizeFilename(String(titleRaw)).slice(0, maxTitleLength)
+    const titleStr = typeof titleRaw === "string" ? titleRaw : "";
+    const sanitizedTitle = titleStr
+        ? sanitizeFilename(titleStr).slice(0, maxTitleLength)
         : "";
     const fullCtx: TemplateContext = {
         ...ctx,

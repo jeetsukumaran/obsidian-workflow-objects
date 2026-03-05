@@ -24,7 +24,8 @@ function toFormulaKey(fieldName: string): string {
  * Example: `{{ content-type }}.base` → `article.base`
  */
 async function expandCatalogTemplate(template: string, typeName: string): Promise<string> {
-    return liquidEngine.parseAndRender(template, { "content-type": typeName });
+    const result: string = await liquidEngine.parseAndRender(template, { "content-type": typeName });
+    return result;
 }
 
 // ─── .base content generation ─────────────────────────────────────────────────

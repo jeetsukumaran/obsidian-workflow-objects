@@ -1,7 +1,7 @@
 import { App, Modal, Notice, Setting, TFile } from "obsidian";
 import { WorkflowObjectsSettings, FieldDefinition, CatalogTimestampField } from "../types";
 import { TypeService } from "../services/TypeService";
-import { ensureFolderExists } from "../utils/pathUtils";
+import { ensureFolderExists, liquidEngine } from "../utils/pathUtils";
 import { openFile } from "../utils/helpers";
 
 // ─── String helpers ────────────────────────────────────────────────────────────
@@ -18,9 +18,13 @@ function toFormulaKey(fieldName: string): string {
     return fieldName.replace(/[^a-zA-Z0-9]/g, "_");
 }
 
-/** Expand {{content-type}} placeholder with the selected type name */
-function expandCatalogTemplate(template: string, typeName: string): string {
-    return template.replace(/\{\{content-type\}\}/g, typeName);
+/**
+ * Expand a catalog template string using LiquidJS.
+ * The variable `content-type` is set to the selected type name.
+ * Example: `{{ content-type }}.base` → `article.base`
+ */
+async function expandCatalogTemplate(template: string, typeName: string): Promise<string> {
+    return liquidEngine.parseAndRender(template, { "content-type": typeName });
 }
 
 // ─── .base content generation ─────────────────────────────────────────────────
@@ -182,9 +186,6 @@ class CreateCatalogModal extends Modal {
                 dd.setValue(this.options.selectedType);
                 dd.onChange((value) => {
                     this.options.selectedType = value;
-                    // Recompute defaults based on new type (dir/filename are already
-                    // user-overridable, but we update only if they still match the
-                    // previous default — detect by checking current value hasn't drifted).
                     // Simplest approach: leave dir/filename as-is; user can edit manually.
                 });
             });
@@ -205,7 +206,7 @@ class CreateCatalogModal extends Modal {
             .setDesc("Filename for the .base file (include the .base extension).")
             .addText((text) => {
                 text.setValue(this.options.filename)
-                    .setPlaceholder("E.g., '{{content-type}}.base'.")
+                    .setPlaceholder("E.g., '{{ content-type }}.base'.")
                     .onChange((v) => { this.options.filename = v.trim(); });
             });
 
@@ -478,9 +479,9 @@ export async function createWorkflowObjectCatalog(
         const selectedType = await suggester.openAndGetValue();
         if (!selectedType) return;
 
-        // 3. Compute default dir / filename by expanding {{content-type}}
-        const defaultDir = expandCatalogTemplate(settings.catalogDir, selectedType);
-        const defaultFilename = expandCatalogTemplate(settings.catalogFilename, selectedType);
+        // 3. Compute default dir / filename by expanding {{ content-type }}
+        const defaultDir = await expandCatalogTemplate(settings.catalogDir, selectedType);
+        const defaultFilename = await expandCatalogTemplate(settings.catalogFilename, selectedType);
 
         // 4. Options dialog (type pre-selected, dir + filename editable)
         const modal = new CreateCatalogModal(app, typeNames, {

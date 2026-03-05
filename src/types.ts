@@ -15,11 +15,12 @@ export interface WorkflowObjectsSettings {
     /** Maximum title length for filenames */
     maxTitleLength: number;
     /** Path mappings: [pattern, template][]
-     * Templates support: $1, $2 for regex groups, {{title::first}} for first letter of title */
+     * Templates use LiquidJS syntax. Regex capture groups are available as $1, $2, …
+     * Examples: "content/$1", "{% if section %}{{ section }}/{% endif %}$1" */
     pathMappings: [string, string][];
     /** Filename mappings: [pattern, template][]
-     * Templates support: {{date::FORMAT}}, {{title}}
-     * Examples: "{{date::YYYYMMDDTHHmm}}--{{title}}", "@{{title}}" */
+     * Templates use LiquidJS syntax. `{{ date }}` expands to the YYYYMMDDTHHmm prefix.
+     * Examples: "{{ date }}--{{ title }}", "@{{ title }}" */
     filenameMappings: [string, string][];
     /** Frontmatter properties to look up for date prefix (tried in order, falls back to file ctime) */
     titlePrefixDateProperties: string[];
@@ -30,10 +31,10 @@ export interface WorkflowObjectsSettings {
     /** Sort direction for object lists (files matching a type) */
     objectSortDirection: "asc" | "desc";
     /** Default directory template for new object catalogs.
-     *  Use {{content-type}} as a placeholder for the selected type name. */
+     *  Use {{ content-type }} in LiquidJS syntax as a placeholder for the type name. */
     catalogDir: string;
     /** Default filename template for new object catalogs.
-     *  Use {{content-type}} as a placeholder for the selected type name. */
+     *  Use {{ content-type }} in LiquidJS syntax as a placeholder for the type name. */
     catalogFilename: string;
     /** Whether to register sentence-case displayNames for all schema fields by default */
     catalogRemapDisplayNames: boolean;
@@ -148,7 +149,7 @@ export const DEFAULT_SETTINGS: WorkflowObjectsSettings = {
     wrapAround: true,
     maxTitleLength: 120,
     pathMappings: [["^(.+)$", "content/$1"]],
-    filenameMappings: [["^.*$", "{{date::YYYYMMDDTHHmm}}--{{title}}"]],
+    filenameMappings: [["^.*$", "{{ date }}--{{ title }}"]],
     titlePrefixDateProperties: [
         "date-indexed",
         "date-created",
@@ -160,7 +161,7 @@ export const DEFAULT_SETTINGS: WorkflowObjectsSettings = {
     defaultFieldSort: "schema",
     objectSortDirection: "desc",
     catalogDir: "",
-    catalogFilename: "{{content-type}}.base",
+    catalogFilename: "{{ content-type }}.base",
     catalogRemapDisplayNames: true,
     catalogCtimeField: { enabled: true, displayName: "Date file created" },
     catalogMtimeField: { enabled: true, displayName: "Date file modified" },

@@ -70,13 +70,6 @@ export async function createNewWorkflowObject(
         // Sort according to settings
         const sortedEntries = sortEntries(entries, fieldOrder, settings.defaultFieldSort);
 
-        // Build YAML
-        // const yamlLines = sortedEntries.map(([key, value]) => {
-        //     if (key === settings.fields.title) {
-        //         return `${key}: ${formatYamlValue(value)}`;  // route through the same formatter
-        //     }
-        //     return `${key}: ${formatYamlValue(value)}`;
-        // });
         const yamlLines = sortedEntries.map(([key, value]) =>
             `${key}: ${formatYamlValue(value)}`
         );
@@ -89,7 +82,7 @@ export async function createNewWorkflowObject(
         frontmatterCtx[settings.fields.title] = title;
 
         // Compute file path using shared logic (new file, so no existing prefix or ctime)
-        const pathInfo = computeFilePath(
+        const pathInfo = await computeFilePath(
             settings,
             selectedType,
             title,
@@ -155,7 +148,7 @@ ${typeService.getTypeFieldName()}: ${selectedType}
 ${selected}`;
 
         // Compute file path using shared logic
-        const pathInfo = computeFilePath(
+        const pathInfo = await computeFilePath(
             settings,
             selectedType,
             title,

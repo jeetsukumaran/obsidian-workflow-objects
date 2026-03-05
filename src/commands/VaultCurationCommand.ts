@@ -161,9 +161,9 @@ export async function reshelveFile(
         settings.titlePrefixDateProperties
     );
 
-    const pathInfo = frontmatterDate
+    const pathInfo = await (frontmatterDate
         ? computeFilePath(settings, typeValue, titleValue, null, frontmatterDate, frontmatter)
-        : computeFilePath(settings, typeValue, titleValue, existingPrefix, file.stat.ctime, frontmatter);
+        : computeFilePath(settings, typeValue, titleValue, existingPrefix, file.stat.ctime, frontmatter));
 
     if (file.path === pathInfo.fullPath) return false;
 

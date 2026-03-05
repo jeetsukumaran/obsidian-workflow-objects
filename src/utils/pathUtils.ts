@@ -1,13 +1,32 @@
 import { App } from "obsidian";
+import { Liquid } from "liquidjs";
 import { WorkflowObjectsSettings } from "../types";
 import { sanitizeFilename } from "./helpers";
 
 const DATE_PREFIX_REGEX = /^(\d{8}T\d{4})--/;
 
+// ─── Liquid engine ─────────────────────────────────────────────────────────────
+
+/**
+ * Shared LiquidJS engine used by path/filename templates and catalog templates.
+ *
+ * Options:
+ *   strictVariables: false → undefined context keys resolve to '' rather than
+ *                            throwing, which is the right behaviour for optional
+ *                            frontmatter fields.
+ *   strictFilters:   false → unknown filter names are silently ignored so a
+ *                            mis-typed filter in user settings doesn't crash the
+ *                            plugin.
+ */
+export const liquidEngine = new Liquid({
+    strictVariables: false,
+    strictFilters: false,
+});
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /**
- * Result of computing file path information
+ * Result of computing file path information.
  */
 export interface FilePathInfo {
     /** Full path including folder and extension */
@@ -21,153 +40,49 @@ export interface FilePathInfo {
 }
 
 /**
- * Template context: all values are pre-stringified.
- * Keys match frontmatter field names; "date" is the date prefix.
+ * Template context passed to LiquidJS.  Values are kept at their native JS
+ * types so that LiquidJS truthiness (nil/false → falsy, everything else →
+ * truthy) aligns with YAML booleans parsed by Obsidian.  The reserved `date`
+ * key holds the YYYYMMDDTHHmm date-prefix string.
  */
-export type TemplateContext = Record<string, string | null | undefined>;
-
-type ConditionalType = "iftrue" | "iffalse" | "ifany" | "ifempty";
-
-interface TemplateModifiers {
-    prefix?: string;
-    suffix?: string;
-    default?: string;
-    /** Conditional branch: emit `trueVal` (or `elseVal`) based on the field. */
-    conditional?: { type: ConditionalType; trueVal: string; elseVal?: string };
-}
+export type TemplateContext = Record<string, unknown>;
 
 // ─── Template engine ──────────────────────────────────────────────────────────
 
 /**
- * A non-empty value that is not "false" or "0" is considered truthy.
- * This matches the YAML boolean/string representations Obsidian stores.
+ * Expand a LiquidJS template string using the provided context.
+ *
+ * Full LiquidJS syntax is available.  Common patterns:
+ *
+ *   {{ title }}
+ *   {{ role | default: "artifact" }}
+ *   {% if section %}/{{ section }}{% endif %}{{ title }}
+ *   {% if tag %}[{{ tag }}]{% endif %}
+ *   {% if archived %}archived/{% else %}live/{% endif %}{{ date }}--{{ title }}
+ *
+ * The `date` key is reserved and pre-populated with the YYYYMMDDTHHmm prefix.
+ * All other keys are drawn from the note's frontmatter.
+ *
+ * See https://liquidjs.com/tutorials/intro-to-liquid.html for full syntax.
  */
-function isTruthy(value: string | null): boolean {
-    if (value === null) return false;
-    const v = value.trim().toLowerCase();
-    return v !== "" && v !== "false" && v !== "0";
-}
-
-/**
- * Parse `key:value` modifier pairs from a `::key:value(::key:value)*` string.
- * Each segment after splitting on `::` is `key:value`; the value may itself
- * contain colons (e.g. `::default:foo:bar`).
- *
- * Conditional modifiers (`iftrue`, `iffalse`, `ifany`, `ifempty`) accept an
- * optional else-branch separated by a single `:`:
- *   `iftrue:<trueVal>`          — emit trueVal when condition holds
- *   `iftrue:<trueVal>:<elseVal>` — emit elseVal otherwise
- * Values may themselves contain `{{field}}` placeholders; they are expanded
- * after the branch is chosen. They must not contain `::`.
- */
-function parseModifiers(raw: string): TemplateModifiers {
-    const mods: TemplateModifiers = {};
-    for (const seg of raw.split("::")) {
-        const colon = seg.indexOf(":");
-        if (colon === -1) continue;
-        const key = seg.slice(0, colon).trim();
-        const rest = seg.slice(colon + 1); // everything after the first ":"
-        if (key === "prefix") mods.prefix = rest;
-        else if (key === "suffix") mods.suffix = rest;
-        else if (key === "default") mods.default = rest;
-        else if (key === "iftrue" || key === "iffalse" || key === "ifany" || key === "ifempty") {
-            const sep = rest.indexOf(":");
-            mods.conditional = {
-                type: key,
-                trueVal: sep === -1 ? rest : rest.slice(0, sep),
-                elseVal: sep === -1 ? undefined : rest.slice(sep + 1),
-            };
-        }
-    }
-    return mods;
-}
-
-/**
- * Expand a single `{{field(::mod:val)*}}` token.
- *
- * Standard modifiers:
- *   `::prefix:<str>`   — prepend when field has a value
- *   `::suffix:<str>`   — append  when field has a value
- *   `::default:<str>`  — fallback when field is absent/empty
- *
- * Conditional modifiers (mutually exclusive with prefix/suffix/default):
- *   `::iftrue:<val>[:<else>]`  — if field is truthy emit val, else emit else (or "")
- *   `::iffalse:<val>[:<else>]` — if field is falsy  emit val, else emit else (or "")
- *   `::ifany:<val>[:<else>]`   — if field is non-empty emit val, else emit else (or "")
- *   `::ifempty:<val>[:<else>]` — if field is empty/absent emit val, else emit else (or "")
- *
- * Chosen conditional values are plain strings — they must not contain `{{...}}`
- * (the flat regex cannot handle nesting). Place dynamic tokens outside the
- * conditional token instead.
- */
-function expandToken(field: string, modsRaw: string, ctx: TemplateContext): string {
-    const mods = modsRaw ? parseModifiers(modsRaw) : {};
-    const raw = ctx[field];
-    const value = raw != null && String(raw).trim() !== "" ? String(raw).trim() : null;
-
-    if (mods.conditional) {
-        const { type, trueVal, elseVal } = mods.conditional;
-        const condition =
-            type === "iftrue"  ?  isTruthy(value) :
-            type === "iffalse" ? !isTruthy(value) :
-            type === "ifany"   ?  value !== null   :
-          /*type === "ifempty"*/  value === null;
-        const chosen = condition ? trueVal : (elseVal ?? "");
-        return chosen;
-    }
-
-    const resolved = value ?? (mods.default !== undefined ? mods.default : null);
-    if (resolved === null) return "";
-    return `${mods.prefix ?? ""}${resolved}${mods.suffix ?? ""}`;
-}
-
-/**
- * Expand all `{{field(::mod:val)*}}` placeholders in a template string.
- *
- * Standard modifiers (stackable via `::`):\n *   `::prefix:<str>`   — prepend <str> when the field has a value
- *   `::suffix:<str>`   — append  <str> when the field has a value
- *   `::default:<str>`  — use <str> when the field is absent or empty
- *
- * Conditional modifiers (each accepts an optional `:<else-val>` branch):
- *   `::iftrue:<val>[:<else>]`  — emit val when field is truthy (non-empty, not "false"/"0")
- *   `::iffalse:<val>[:<else>]` — emit val when field is falsy
- *   `::ifany:<val>[:<else>]`   — emit val when field is present/non-empty
- *   `::ifempty:<val>[:<else>]` — emit val when field is absent or empty
- *
- * Conditional values are plain strings. They must not contain `{{...}}` or `::`.
- * Place dynamic tokens outside the conditional instead:
- *   ✓ `{{archived::iftrue:archived/}}{{date}}--{{title}}`
- *   ✗ `{{archived::iftrue:archived/{{date}}--{{title}}}}`  ← regex ambiguity
- *
- * The `date` key is reserved and should be pre-populated in the context.
- *
- * Examples:
- *   `{{title}}`
- *   `{{role::default:artifact}}`
- *   `{{archived::iftrue:archived/}}`
- *   `{{archived::iftrue:archived/:live/}}`
- *   `{{tag::ifany:tags/{{tag}}/}}`
- *   `{{title::prefix:+++::suffix:/}}`
- */
-export function expandTemplate(template: string, ctx: TemplateContext): string {
-    // Match {{fieldname}} or {{fieldname::modifiers}}
-    // fieldname: word chars + hyphens; modifiers: everything up to }}
-    return template.replace(/\{\{([\w][\w-]*)(?:::((?:[^}](?!\}\})|[^}])*))?\}\}/g, (_, field, modsRaw) => {
-        return expandToken(field, modsRaw ?? "", ctx);
-    });
+export async function expandTemplate(template: string, ctx: TemplateContext): Promise<string> {
+    return liquidEngine.parseAndRender(template, ctx);
 }
 
 // ─── Path / filename helpers ──────────────────────────────────────────────────
 
 /**
  * Determine destination folder based on content-type and path mappings.
- * Templates support regex group substitution (`$1`, `$2`) AND `{{field}}` expansion.
+ *
+ * Each mapping is `[regexPattern, liquidTemplate]`.  Regex capture groups are
+ * expanded first (`$1`, `$2`, …), then the result is processed as a LiquidJS
+ * template with the full frontmatter context.
  */
-export function getDestinationFolder(
+export async function getDestinationFolder(
     typeValue: string | null | undefined,
     pathMappings: [string, string][],
     ctx: TemplateContext = {}
-): string | null {
+): Promise<string | null> {
     if (!typeValue) return null;
 
     for (const [pattern, template] of pathMappings) {
@@ -181,7 +96,7 @@ export function getDestinationFolder(
 }
 
 /**
- * Generate a date prefix in YYYYMMDDTHHmm format
+ * Generate a date prefix in YYYYMMDDTHHmm format.
  */
 export function generateDatePrefix(date?: Date): string {
     const d = date || new Date();
@@ -190,7 +105,7 @@ export function generateDatePrefix(date?: Date): string {
 }
 
 /**
- * Extract date prefix from an existing filename if present
+ * Extract date prefix from an existing filename if present.
  */
 export function extractDatePrefix(basename: string): string | null {
     const match = basename.match(DATE_PREFIX_REGEX);
@@ -198,7 +113,7 @@ export function extractDatePrefix(basename: string): string | null {
 }
 
 /**
- * Get filename pattern based on content-type and filename mappings.
+ * Get filename template based on content-type and filename mappings.
  * Falls back to the default date+title pattern.
  */
 export function getFilenamePattern(
@@ -210,23 +125,19 @@ export function getFilenamePattern(
             if (typeValue.match(new RegExp(pattern))) return template;
         }
     }
-    return "{{date::YYYYMMDDTHHmm}}--{{title}}";
+    return "{{ date }}--{{ title }}";
 }
 
 /**
- * Build a basename from a pattern template using the provided context.
- * `{{date}}` (or `{{date::*}}`) expands to `datePrefix`.
- * All other `{{field}}` tokens expand via the context map.
+ * Build a basename from a LiquidJS template using the provided context.
+ * `{{ date }}` expands to `datePrefix`; all other tokens expand via the context.
  */
-export function buildFilenameFromPattern(
+export async function buildFilenameFromPattern(
     pattern: string,
     ctx: TemplateContext,
     datePrefix: string,
     maxTitleLength: number
-): string {
-    // Sanitize title in context so the filename is safe.
-    // Fall back to "untitled" so that patterns like {{date}}--{{title}} never
-    // produce a bare "YYYYMMDDTHHmm--" basename when the title is absent.
+): Promise<string> {
     const titleRaw = ctx["title"];
     const sanitizedTitle = titleRaw
         ? sanitizeFilename(String(titleRaw)).slice(0, maxTitleLength)
@@ -234,13 +145,10 @@ export function buildFilenameFromPattern(
     const fullCtx: TemplateContext = {
         ...ctx,
         title: sanitizedTitle || "untitled",
-        // date / date::FORMAT both resolve to the datePrefix
         date: datePrefix,
     };
 
-    // Normalise {{date::FORMAT}} → {{date}} so expandTemplate handles it
-    const normalised = pattern.replace(/\{\{date(?:::[^}]*)?\}\}/g, "{{date}}");
-    const result = expandTemplate(normalised, fullCtx).trim();
+    const result = (await expandTemplate(pattern, fullCtx)).trim();
     return result || `${datePrefix}--untitled`;
 }
 
@@ -249,38 +157,27 @@ export function buildFilenameFromPattern(
 /**
  * Compute full file path info for a new or existing workflow object.
  *
- * @param settings         Plugin settings
- * @param typeValue        Content-type frontmatter value
- * @param title            Note title
- * @param existingDatePrefix  Date prefix extracted from the existing filename (reshelve)
- * @param ctime            File creation timestamp in ms (reshelve fallback)
- * @param frontmatter      Full frontmatter record — all fields are available in templates
+ * @param settings             Plugin settings
+ * @param typeValue            Content-type frontmatter value
+ * @param title                Note title
+ * @param existingDatePrefix   Date prefix extracted from the existing filename (reshelve)
+ * @param ctime                File creation timestamp in ms (reshelve fallback)
+ * @param frontmatter          Full frontmatter record — all fields available in templates
  */
-export function computeFilePath(
+export async function computeFilePath(
     settings: WorkflowObjectsSettings,
     typeValue: string | null | undefined,
     title: string | null | undefined,
     existingDatePrefix?: string | null,
     ctime?: number,
     frontmatter: Record<string, unknown> = {}
-): FilePathInfo {
-    // Build template context from frontmatter; coerce all values to strings
-    const ctx: TemplateContext = {};
-    for (const [k, v] of Object.entries(frontmatter)) {
-        if (v === null || v === undefined) {
-            ctx[k] = undefined;
-        } else if (typeof v === "object") {
-            ctx[k] = JSON.stringify(v);
-        } else if (typeof v === "string") {
-            ctx[k] = v;
-        } else {
-            ctx[k] = String(v as number | boolean | bigint | symbol);
-        }
-    }
-    // Ensure title is in context (may override frontmatter value if passed explicitly)
+): Promise<FilePathInfo> {
+    // Preserve native JS types so that LiquidJS truthiness aligns with YAML
+    // booleans (boolean false → falsy, nil → falsy, everything else → truthy).
+    const ctx: TemplateContext = { ...frontmatter };
     if (title != null) ctx["title"] = title;
 
-    const folder = getDestinationFolder(typeValue, settings.pathMappings, ctx) ?? "";
+    const folder = (await getDestinationFolder(typeValue, settings.pathMappings, ctx)) ?? "";
 
     const datePrefix =
         existingDatePrefix ||
@@ -288,7 +185,12 @@ export function computeFilePath(
         generateDatePrefix();
 
     const filenamePattern = getFilenamePattern(typeValue, settings.filenameMappings);
-    const basename = buildFilenameFromPattern(filenamePattern, ctx, datePrefix, settings.maxTitleLength);
+    const basename = await buildFilenameFromPattern(
+        filenamePattern,
+        ctx,
+        datePrefix,
+        settings.maxTitleLength
+    );
 
     const fullPath = folder ? `${folder}/${basename}.md` : `${basename}.md`;
 

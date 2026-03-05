@@ -5,18 +5,18 @@ import { DEFAULT_SETTINGS } from "./types";
 // ─── Shared template syntax description ───────────────────────────────────────
 
 const TEMPLATE_SYNTAX = [
-    "Templates expand {{field}} placeholders using the note's frontmatter.",
-    "Any frontmatter field can be used, not just title.",
+    "Templates use LiquidJS syntax (liquidjs.com). Frontmatter fields are available as variables.",
     "",
-    "Modifiers (stackable, separated by ::):",
-    "  {{field::prefix:/}}          → prepend '/' when the field has a value",
-    "  {{field::suffix:-}}          → append '-' when the field has a value",
-    "  {{field::default:unknown}}   → use 'unknown' when the field is absent",
+    "  {{ field }}                                      → insert field value",
+    "  {{ field | default: \"val\" }}                    → fallback when field is absent",
+    "  {% if field %}/{{ field }}{% endif %}            → prefix '/' when field has a value",
+    "  {% if field %}{{ field }}-{% endif %}            → suffix '-' when field has a value",
+    "  {% if flag %}archived/{% else %}live/{% endif %} → conditional branch",
     "",
     "Examples:",
-    "  {{production-role::default:artifact}}",
-    "  {{section::prefix:/}}{{title}}",
-    "  {{tag::prefix:[::suffix:]}}",
+    "  {{ production-role | default: \"artifact\" }}",
+    "  {% if section %}/{{ section }}{% endif %}{{ title }}",
+    "  {% if tag %}[{{ tag }}]{% endif %}",
 ].join("\n");
 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             .setName("Title field")
             .setDesc(
                 "Frontmatter field used as the human-readable title of a workflow object. " +
-                "Referenced as {{title}} in path and filename templates."
+                "Referenced as {{ title }} in path and filename templates (LiquidJS syntax)."
             )
             .addText((text) =>
                 text
@@ -235,7 +235,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         catalogDesc.createEl("span", {
             text:
                 "Default paths used when creating a new workflow object catalog (.base file). " +
-                "Use {{content-type}} in either template to insert the selected object type name.",
+                "Use {{ content-type }} in LiquidJS syntax to insert the selected object type name.",
         });
 
         new Setting(containerEl)
@@ -244,7 +244,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 "Vault folder where catalog files are created. " +
                 "Leave empty to place catalogs in the vault root. " +
                 "Folders are created automatically as needed. " +
-                "Use {{content-type}} to insert the object type name."
+                "Use {{ content-type }} in LiquidJS syntax to insert the object type name."
             )
             .addText((text) =>
                 text
@@ -260,7 +260,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             .setName("Catalog filename")
             .setDesc(
                 "Filename template for new catalog files (must end with .base). " +
-                "Example: 'catalog.{{content-type}}.base'."
+                "Example: 'catalog.{{ content-type }}.base'."
             )
             .addText((text) =>
                 text
@@ -377,13 +377,13 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         filenameDesc.createEl("span", {
             text: "Map a workflow object's type value to a filename template. " +
                   "The first matching pattern wins. " +
-                  "{{date}} expands to the date prefix (YYYYMMDDTHHmm). " +
-                  "Any other {{field}} expands using the note's frontmatter.",
+                  "{{ date }} expands to the YYYYMMDDTHHmm date prefix. " +
+                  "Any frontmatter field is available as a LiquidJS variable.",
         });
         filenameDesc.createEl("br");
         filenameDesc.createEl("br");
         filenameDesc.createEl("span", {
-            text: "Example: {{date::YYYYMMDDTHHmm}}--{{title}} produces '20240315T0930--My Note'.",
+            text: "Example: {{ date }}--{{ title }} produces '20240315T0930--My Note'.",
         });
         filenameDesc.createEl("br");
         filenameDesc.createEl("br");
@@ -571,7 +571,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             this.plugin.settings.pathMappings,
             "path-mapping",
             "Pattern (regex, e.g. ^(.+)$)",
-            "Template (e.g. content/$1/{{title::prefix:_}})",
+            "Template (e.g. content/$1 or {% if section %}{{ section }}/{% endif %}$1)",
             () => ["^(.+)$", "content/$1"],
             async () => {
                 await this.plugin.saveSettings();
@@ -586,8 +586,8 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             this.plugin.settings.filenameMappings,
             "filename-mapping",
             "Pattern (regex, e.g. ^.*$)",
-            "Template (e.g. {{date}}--{{title}})",
-            () => ["^.*$", "{{date::YYYYMMDDTHHmm}}--{{title}}"],
+            "Template (e.g. {{ date }}--{{ title }})",
+            () => ["^.*$", "{{ date }}--{{ title }}"],
             async () => {
                 await this.plugin.saveSettings();
                 this.renderFilenameMappings(container);

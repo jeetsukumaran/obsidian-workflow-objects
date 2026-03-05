@@ -132,11 +132,11 @@ export function formatYamlValue(value: unknown): string {
     //     : String(value);
     if (value === null || value === undefined) {
         return String(value);
-    }
-    if (typeof value === "object") {
+    } else if (typeof value === "object") {
         return JSON.stringify(value);
+    } else {
+        return String(value as string | number | boolean | bigint | symbol);
     }
-    return String(value);
 }
 
 /**

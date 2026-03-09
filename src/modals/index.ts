@@ -5,3 +5,5 @@ export { VaultCurationModal } from "./VaultCurationModal";
 export type { VaultCurationOptions } from "./VaultCurationModal";
 export { CloneObjectTypeModal } from "./CloneObjectTypeModal";
 export type { CloneObjectTypeResult } from "./CloneObjectTypeModal";
+export { CopyFieldsFromModal } from "./CopyFieldsFromModal";
+export type { CopyFieldsResult } from "./CopyFieldsFromModal";

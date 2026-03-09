@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, Menu, TAbstractFile, TFile } from "obsidian";
 import { WorkflowObjectsSettings, DEFAULT_SETTINGS } from "./types";
 import { TypeService } from "./services/TypeService";
 import { FrontmatterService } from "./services/FrontmatterService";
@@ -19,6 +19,7 @@ import {
     curateVault,
     createWorkflowObjectCatalog,
     cloneObjectType,
+    copyFieldsFrom,
 } from "./commands";
 
 export default class WorkflowObjectsPlugin extends Plugin {
@@ -184,6 +185,40 @@ export default class WorkflowObjectsPlugin extends Plugin {
             callback: () =>
                 cloneObjectType(this.app, this.settings, this.typeService),
         });
+
+        // Copy fields commands
+        this.addCommand({
+            id: "copy-fields-from",
+            name: "Copy fields from…",
+            callback: () =>
+                copyFieldsFrom(this.app, this.settings, this.typeService),
+        });
+
+        // File-explorer context menu: show "Copy fields from…" on type definition files
+        this.registerEvent(
+            this.app.workspace.on(
+                "file-menu",
+                (menu: Menu, file: TAbstractFile) => {
+                    if (!(file instanceof TFile)) return;
+                    if (!this.typeService.isTypeDefinitionFile(file)) return;
+                    menu.addSeparator();
+                    menu.addItem((item) =>
+                        item
+                            .setTitle("Copy fields from…")
+                            .setIcon("copy-plus")
+                            .setSection("action")
+                            .onClick(() =>
+                                copyFieldsFrom(
+                                    this.app,
+                                    this.settings,
+                                    this.typeService,
+                                    file
+                                )
+                            )
+                    );
+                }
+            )
+        );
     }
 
     async loadSettings(): Promise<void> {

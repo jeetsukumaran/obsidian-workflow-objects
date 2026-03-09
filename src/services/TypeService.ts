@@ -274,4 +274,19 @@ export class TypeService {
     typeExists(typeName: string): boolean {
         return this.getTypeFile(typeName) !== null;
     }
+
+    /**
+     * Return true when `file` is a top-level Markdown file inside the types
+     * folder — i.e. it is a Metadata Menu fileClass / type definition file.
+     *
+     * Used by the context-menu hook to decide whether to show the
+     * "Copy fields from…" item.
+     */
+    isTypeDefinitionFile(file: TFile): boolean {
+        if (file.extension !== "md") return false;
+        const typesPath = this.getTypesPath();
+        // Must be a direct child of the types folder (no sub-folder)
+        const expectedParent = typesPath.replace(/\/$/, "");
+        return file.parent?.path === expectedParent;
+    }
 }

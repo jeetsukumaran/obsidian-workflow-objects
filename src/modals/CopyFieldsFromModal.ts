@@ -4,86 +4,86 @@ import { generateFieldId } from "../utils/fieldUtils";
 
 // ── Internal data model ────────────────────────────────────────────────────
 
-/**
- * A mutable working copy of one source field, used inside the modal.
- */
 interface FieldEntry {
-    /** Name from the source (shown as placeholder) */
+    /** Original name in the source type */
     readonly sourceName: string;
     /** Editable name; defaults to sourceName */
     displayName: string;
     readonly type: string;
     readonly options: Record<string, unknown>;
     readonly path: string;
-    /** Whether the field is selected for inclusion in the clone */
+    /** Whether the field is selected for copying */
     included: boolean;
-    /** Fresh ID assigned at modal-open time; stable for the life of the modal */
+    /**
+     * True when a field with this name already exists in the target.
+     * Pre-existing fields default to unchecked; if the user checks them
+     * the copied definition will overwrite the existing one.
+     */
+    readonly existsInTarget: boolean;
+    /** Fresh ID — used only for new fields; overwritten fields keep their target ID */
     readonly newId: string;
 }
 
 /** Result handed back to the command when the user confirms */
-export interface CloneObjectTypeResult {
-    /** The name the user typed for the new object type */
-    newName: string;
-    /**
-     * Fields to write into the clone, in the order the user left them.
-     * Only includes fields the user kept checked.
-     */
+export interface CopyFieldsResult {
+    /** Fields the user selected, in the order they arranged them */
     fields: FieldDefinition[];
-    /** Ordered array of the new field IDs — for `fieldsOrder` in the fileClass */
+    /** Ordered IDs — for `fieldsOrder` merging in the target fileClass */
     fieldsOrder: string[];
+    /** Names of fields that will overwrite an existing definition in the target */
+    overwriteNames: Set<string>;
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────
 
 /**
- * Modal for cloning an existing object type (fileClass).
+ * Modal for "Copy fields from …" — copies a subset of fields from a source
+ * type into a target type that already exists.
  *
- * Presents:
- *  • A name input with live collision-checking against existing type names.
- *  • A draggable, reorderable field list where each row can be:
- *      – included/excluded via checkbox
- *      – renamed via an inline text input
- *      – reordered via drag-and-drop OR ↑/↓ buttons
- *
- * On confirm, returns a {@link CloneObjectTypeResult} via `openAndGetValue()`.
+ * Differences from {@link CloneObjectTypeModal}:
+ *  - No name input (the target already has a name).
+ *  - Fields that already exist in the target are shown with an "overwrite"
+ *    badge and default to **unchecked**; the user must explicitly opt in to
+ *    replacing them.
+ *  - Fields new to the target default to **checked**.
+ *  - Drag / ↑↓ reordering and rename inputs behave identically to the clone modal.
  */
-export class CloneObjectTypeModal extends Modal {
+export class CopyFieldsFromModal extends Modal {
     private sourceName: string;
-    private existingNames: string[];
+    private targetName: string;
     private entries: FieldEntry[];
 
-    // live state
-    private newName = "";
     private submitted = false;
-    private onSubmit: ((result: CloneObjectTypeResult | null) => void) | null = null;
+    private onSubmit: ((result: CopyFieldsResult | null) => void) | null = null;
 
-    // DOM refs for live re-render
-    private nameInputEl: HTMLInputElement | null = null;
-    private nameErrorEl: HTMLElement | null = null;
     private fieldListEl: HTMLElement | null = null;
+    private errorEl: HTMLElement | null = null;
 
     constructor(
         app: App,
         sourceName: string,
         sourceFields: FieldDefinition[],
-        existingTypeNames: string[]
+        targetName: string,
+        targetFieldNames: Set<string>
     ) {
         super(app);
         this.sourceName = sourceName;
-        this.existingNames = existingTypeNames.map((n) => n.toLowerCase());
-        this.newName = sourceName + "-copy";
+        this.targetName = targetName;
 
-        // Build working entries from source fields, assigning fresh IDs
-        this.entries = sourceFields.map((f) => ({
-            sourceName: f.name,
-            displayName: f.name,
-            type: f.type ?? "Input",
-            options: (f.options as Record<string, unknown>) ?? {},
-            path: ((f as unknown) as Record<string, unknown>).path as string ?? "",
-            included: true,
-            newId: generateFieldId(),
-        }));
+        this.entries = sourceFields.map((f) => {
+            const existsInTarget = targetFieldNames.has(f.name);
+            return {
+                sourceName: f.name,
+                displayName: f.name,
+                type: f.type ?? "Input",
+                options: (f.options as Record<string, unknown>) ?? {},
+                path: ((f as unknown) as Record<string, unknown>).path as string ?? "",
+                // Pre-existing fields default unchecked; new fields default checked.
+                included: !existsInTarget,
+                existsInTarget,
+                newId: generateFieldId(),
+            };
+        });
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -91,32 +91,50 @@ export class CloneObjectTypeModal extends Modal {
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.addClass("clone-object-type-modal");
+        contentEl.addClass("copy-fields-from-modal");
 
-        contentEl.createEl("h2", { text: "Clone object type" });
-        contentEl.createEl("p", {
-            text: `Source: ${this.sourceName}`,
-            cls: "clone-source-label",
+        contentEl.createEl("h2", { text: "Copy fields from…" });
+
+        const metaEl = contentEl.createDiv({ cls: "copy-fields-meta" });
+        metaEl.createSpan({ cls: "copy-fields-source-label", text: this.sourceName });
+        metaEl.createSpan({ cls: "copy-fields-arrow", text: " → " });
+        metaEl.createSpan({ cls: "copy-fields-target-label", text: this.targetName });
+
+        // Legend
+        const legendEl = contentEl.createEl("p", { cls: "copy-fields-legend" });
+        legendEl.createSpan({ text: "Checked fields will be copied. " });
+        const overwriteSpan = legendEl.createSpan({
+            cls: "copy-fields-overwrite-badge copy-fields-overwrite-badge--inline",
+            text: "overwrite",
+        });
+        overwriteSpan.setAttr("title", "This field already exists in the target type");
+        legendEl.createSpan({ text: " fields already exist in the target and are unchecked by default — check to replace them." });
+
+        this.fieldListEl = contentEl.createDiv({ cls: "clone-field-list" });
+        this.renderFieldRows(this.fieldListEl);
+
+        // Error message
+        this.errorEl = contentEl.createEl("p", {
+            cls: "clone-name-error is-hidden",
+            text: "",
         });
 
-        this.renderNameSection(contentEl);
-        this.renderFieldSection(contentEl);
-        this.renderActions(contentEl);
-
-        // Focus the name input and select-all for quick replacement
-        window.setTimeout(() => {
-            if (this.nameInputEl) {
-                this.nameInputEl.focus();
-                this.nameInputEl.select();
-            }
-        }, 10);
+        new Setting(contentEl)
+            .addButton((btn) =>
+                btn
+                    .setButtonText("Copy")
+                    .setCta()
+                    .onClick(() => this.trySubmit())
+            )
+            .addButton((btn) =>
+                btn.setButtonText("Cancel").onClick(() => this.close())
+            );
     }
 
     onClose(): void {
         this.contentEl.empty();
-        this.nameInputEl = null;
-        this.nameErrorEl = null;
         this.fieldListEl = null;
+        this.errorEl = null;
 
         if (this.onSubmit) {
             const cb = this.onSubmit;
@@ -127,59 +145,14 @@ export class CloneObjectTypeModal extends Modal {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    openAndGetValue(): Promise<CloneObjectTypeResult | null> {
+    openAndGetValue(): Promise<CopyFieldsResult | null> {
         return new Promise((resolve) => {
             this.onSubmit = resolve;
             this.open();
         });
     }
 
-    // ── Rendering ────────────────────────────────────────────────────────────
-
-    private renderNameSection(parent: HTMLElement): void {
-        parent.createEl("h3", { text: "New name" });
-
-        new Setting(parent)
-            .setName("Name")
-            .setDesc("Must be unique — no two object types can share a name.")
-            .addText((text) => {
-                this.nameInputEl = text.inputEl;
-                text.setValue(this.newName)
-                    .setPlaceholder(`${this.sourceName}-copy`);
-
-                text.inputEl.addEventListener("input", () => {
-                    this.newName = text.inputEl.value.trim();
-                    this.updateNameError();
-                });
-
-                text.inputEl.addEventListener("keydown", (e) => {
-                    if (e.key === "Enter") {
-                        e.preventDefault();
-                        this.trySubmit();
-                    }
-                });
-            });
-
-        // Error message (hidden until there's a problem)
-        this.nameErrorEl = parent.createEl("p", {
-            cls: "clone-name-error is-hidden",
-            text: "",
-        });
-
-        // Validate immediately so "copy" suffix collision is flagged upfront
-        this.updateNameError();
-    }
-
-    private renderFieldSection(parent: HTMLElement): void {
-        parent.createEl("h3", { text: "Fields" });
-        parent.createEl("p", {
-            text: "Uncheck to omit a field from the clone. Edit the name to rename it. Drag or use ↑/↓ to reorder.",
-            cls: "clone-field-hint",
-        });
-
-        this.fieldListEl = parent.createDiv({ cls: "clone-field-list" });
-        this.renderFieldRows(this.fieldListEl);
-    }
+    // ── Field rows ────────────────────────────────────────────────────────────
 
     private renderFieldRows(container: HTMLElement): void {
         container.empty();
@@ -193,7 +166,10 @@ export class CloneObjectTypeModal extends Modal {
                 cls: "mapping-row clone-field-row",
             });
             rowEl.setAttr("draggable", "true");
-            rowEl.setAttr("aria-label", `Field ${i + 1} of ${this.entries.length}: ${entry.displayName}`);
+            rowEl.setAttr(
+                "aria-label",
+                `Field ${i + 1} of ${this.entries.length}: ${entry.displayName}`
+            );
 
             // ── Drag handle ──────────────────────────────────────────────────
             const handle = rowEl.createSpan({
@@ -243,7 +219,6 @@ export class CloneObjectTypeModal extends Modal {
                 const [moved] = this.entries.splice(dragSourceIndex, 1);
                 this.entries.splice(i, 0, moved);
                 dragSourceIndex = -1;
-                // Re-render field rows (container ref is stable)
                 this.renderFieldRows(container);
             });
 
@@ -284,7 +259,8 @@ export class CloneObjectTypeModal extends Modal {
             });
             checkbox.type = "checkbox";
             checkbox.checked = entry.included;
-            checkbox.setAttr("aria-label", `Include field "${entry.displayName}"`);
+            checkbox.setAttr("aria-label", `Copy field "${entry.displayName}"`);
+
             checkbox.addEventListener("change", () => {
                 this.entries[i].included = checkbox.checked;
                 nameInput.disabled = !checkbox.checked;
@@ -312,7 +288,6 @@ export class CloneObjectTypeModal extends Modal {
             });
 
             nameInput.addEventListener("blur", () => {
-                // Normalise on blur: if left blank, revert to source name
                 if (!nameInput.value.trim()) {
                     this.entries[i].displayName = entry.sourceName;
                     nameInput.value = entry.sourceName;
@@ -324,58 +299,25 @@ export class CloneObjectTypeModal extends Modal {
                 cls: "clone-field-type-badge",
                 text: entry.type,
             });
-        }
-    }
 
-    private renderActions(parent: HTMLElement): void {
-        new Setting(parent)
-            .addButton((btn) =>
-                btn
-                    .setButtonText("Clone")
-                    .setCta()
-                    .onClick(() => this.trySubmit())
-            )
-            .addButton((btn) =>
-                btn.setButtonText("Cancel").onClick(() => this.close())
-            );
+            // ── Overwrite badge (only for fields already in target) ───────────
+            if (entry.existsInTarget) {
+                const badge = rowEl.createSpan({
+                    cls: "copy-fields-overwrite-badge",
+                    text: "overwrite",
+                });
+                badge.setAttr("title", "This field already exists in the target type. Check to replace its definition.");
+            }
+        }
     }
 
     // ── Validation & submission ───────────────────────────────────────────────
 
-    private nameError(): string | null {
-        const name = this.newName.trim();
-        if (!name) return "Name cannot be empty.";
-        if (name.toLowerCase() === this.sourceName.toLowerCase()) {
-            return "Name must differ from the source type.";
-        }
-        if (this.existingNames.includes(name.toLowerCase())) {
-            return `An object type named "${name}" already exists.`;
-        }
-        return null;
-    }
-
-    private updateNameError(): void {
-        if (!this.nameErrorEl) return;
-        const err = this.nameError();
-        if (err) {
-            this.nameErrorEl.textContent = err;
-            this.nameErrorEl.removeClass("is-hidden");
-        } else {
-            this.nameErrorEl.textContent = "";
-            this.nameErrorEl.addClass("is-hidden");
-        }
-    }
-
     private trySubmit(): void {
-        this.updateNameError();
-        if (this.nameError()) {
-            this.nameInputEl?.focus();
-            return;
-        }
         if (!this.entries.some((e) => e.included)) {
-            if (this.nameErrorEl) {
-                this.nameErrorEl.textContent = "At least one field must be included.";
-                this.nameErrorEl.removeClass("is-hidden");
+            if (this.errorEl) {
+                this.errorEl.textContent = "Select at least one field to copy.";
+                this.errorEl.removeClass("is-hidden");
             }
             return;
         }
@@ -385,24 +327,22 @@ export class CloneObjectTypeModal extends Modal {
 
     // ── Result builder ────────────────────────────────────────────────────────
 
-    private buildResult(): CloneObjectTypeResult {
+    private buildResult(): CopyFieldsResult {
         const included = this.entries.filter((e) => e.included);
+        const overwriteNames = new Set(
+            included.filter((e) => e.existsInTarget).map((e) => e.displayName)
+        );
 
         const fields: FieldDefinition[] = included.map((e) => ({
             id: e.newId,
             name: e.displayName,
             type: e.type,
             options: e.options,
-            // preserve path (nesting) — cast through unknown for safety
-            ...(e.path !== undefined ? { path: e.path } : {}),
+            ...(e.path ? { path: e.path } : {}),
         }));
 
         const fieldsOrder = included.map((e) => e.newId);
 
-        return {
-            newName: this.newName.trim(),
-            fields,
-            fieldsOrder,
-        };
+        return { fields, fieldsOrder, overwriteNames };
     }
 }

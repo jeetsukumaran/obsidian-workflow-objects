@@ -231,3 +231,54 @@
 .clone-field-name-input--disabled {
     opacity: 0.4;
 }
+
+/* ── Copy Fields From Modal ──────────────────────────────────────────────── */
+
+/* Source → target header line */
+.copy-fields-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35em;
+    margin-top: -0.5em;
+    margin-bottom: 0.85em;
+    font-size: 0.9em;
+}
+
+.copy-fields-source-label {
+    color: var(--text-accent);
+    font-weight: 500;
+}
+
+.copy-fields-arrow {
+    color: var(--text-faint);
+}
+
+.copy-fields-target-label {
+    color: var(--text-accent);
+    font-weight: 500;
+}
+
+/* Legend paragraph */
+.copy-fields-legend {
+    color: var(--text-muted);
+    font-size: 0.83em;
+    margin-bottom: 0.6em;
+}
+
+/* "overwrite" badge — appears on rows for fields already in the target */
+.copy-fields-overwrite-badge {
+    flex-shrink: 0;
+    font-size: 0.72em;
+    color: var(--text-on-accent);
+    background: var(--color-orange);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--font-monospace);
+    white-space: nowrap;
+}
+
+/* Inline variant used in the legend */
+.copy-fields-overwrite-badge--inline {
+    display: inline;
+    vertical-align: middle;
+}

@@ -196,6 +196,30 @@ The new type definition file opens automatically after creation.
 
 ---
 
+### Copy fields from…
+
+Copies a selection of field definitions from one object type into another that already exists.
+
+**Entry points:**
+- **Command palette** — the active file must be a type definition in your types folder. It becomes the target.
+- **File explorer right-click** — right-click any type definition file and choose **Copy fields from…**. That file becomes the target.
+
+**Flow:**
+1. A source-type suggester opens (all types except the target are listed).
+2. A dialog shows all fields from the source, with:
+   - Fields **new to the target** — checked by default (will be added).
+   - Fields **already present in the target** — unchecked by default and marked with an <kbd>overwrite</kbd> badge. Check them to replace their existing definition.
+   - Rename and reorder all included fields before confirming, as in the clone dialog.
+3. Click **Copy**.
+
+Merge behaviour in the target's frontmatter:
+- **New fields** are appended to `fields[]` and `fieldsOrder[]`.
+- **Overwritten fields** replace their existing definition in place, preserving their position in `fieldsOrder[]` and their existing Metadata Menu field ID (so MM's index remains consistent).
+
+A notice confirms how many fields were added and how many were overwritten.
+
+---
+
 ### Curate vault (clean / sort / reshelve)
 
 Batch-applies any combination of clean, sort, and reshelve operations across a scoped set of notes. A configuration dialog lets you specify:

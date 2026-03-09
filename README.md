@@ -174,6 +174,28 @@ If a `.base` file already exists at the target path, a collision dialog offers t
 
 ---
 
+### Clone object type
+
+Creates a new object type (fileClass) as a copy of an existing one.
+
+**Flow:**
+1. Choose a source type from the suggester.
+2. A dialog opens showing the new type's name (pre-filled as `<source>-copy`) and all fields from the source schema.
+3. Edit the name — collisions with existing type names are caught and flagged live.
+4. In the field list, for each field:
+   - **Uncheck** the checkbox to omit the field from the clone entirely.
+   - **Edit the name input** to rename the field in the clone (leave blank to keep the source name).
+   - **Drag the row** or use the **↑ / ↓ buttons** to reorder fields.
+5. Click **Clone**.
+
+The new fileClass note is created in the same folder as your other type definitions (the Metadata Menu fileClass folder, or your configured Types path). It is populated with only the fields you kept, under the names and in the order you specified. Each field receives a fresh unique ID so Metadata Menu can track it independently of the source type. Field type, options, and nesting path are preserved from the source.
+
+The new type definition file opens automatically after creation.
+
+> **Note:** The Metadata Menu public API covers field-value operations only and does not expose fileClass creation. The clone is written directly to the vault using the same `processFrontMatter` mechanism Metadata Menu itself uses to maintain fileClass definitions.
+
+---
+
 ### Curate vault (clean / sort / reshelve)
 
 Batch-applies any combination of clean, sort, and reshelve operations across a scoped set of notes. A configuration dialog lets you specify:

@@ -18,6 +18,7 @@ import {
     cleanWorkspace,
     curateVault,
     createWorkflowObjectCatalog,
+    cloneObjectType,
 } from "./commands";
 
 export default class WorkflowObjectsPlugin extends Plugin {
@@ -174,6 +175,14 @@ export default class WorkflowObjectsPlugin extends Plugin {
             name: "Create new workflow object catalog",
             callback: () =>
                 createWorkflowObjectCatalog(this.app, this.settings, this.typeService),
+        });
+
+        // Clone commands
+        this.addCommand({
+            id: "clone-object-type",
+            name: "Clone object type",
+            callback: () =>
+                cloneObjectType(this.app, this.settings, this.typeService),
         });
     }
 

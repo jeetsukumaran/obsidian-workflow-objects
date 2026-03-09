@@ -26,3 +26,5 @@ export { curateVault, reshelveFile } from "./VaultCurationCommand";
 export { cleanWorkspace } from "./WorkspaceCommand";
 
 export { createWorkflowObjectCatalog } from "./CreateCatalogCommand";
+
+export { cloneObjectType } from "./CloneObjectTypeCommand";

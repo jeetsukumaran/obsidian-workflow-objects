@@ -145,3 +145,89 @@
 .mapping-add-btn:hover {
     background: var(--background-modifier-hover);
 }
+
+/* ── Clone Object Type Modal ─────────────────────────────────────────────── */
+
+.clone-object-type-modal .clone-source-label {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-top: -0.5em;
+    margin-bottom: 1em;
+}
+
+.clone-object-type-modal .clone-field-hint {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    margin-bottom: 0.5em;
+}
+
+/* Error message below the name input */
+.clone-name-error {
+    color: var(--text-error);
+    font-size: 0.85em;
+    margin-top: -0.25em;
+    margin-bottom: 0.75em;
+    padding-left: 0.25em;
+}
+
+/* Scrollable field list */
+.clone-field-list {
+    max-height: 380px;
+    overflow-y: auto;
+    margin-bottom: 1em;
+    padding-right: 4px;
+}
+
+/* Each field row — extends the shared mapping-row style */
+.clone-field-row {
+    gap: 8px;
+}
+
+/* Checkbox */
+.clone-field-checkbox {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--interactive-accent);
+}
+
+/* Rename input — grows to fill available space */
+.clone-field-name-input {
+    flex: 1 1 0;
+    min-width: 80px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.9em;
+    color: var(--text-normal);
+    transition: opacity 150ms ease;
+}
+
+.clone-field-name-input:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+}
+
+/* Field type badge */
+.clone-field-type-badge {
+    flex-shrink: 0;
+    font-size: 0.72em;
+    color: var(--text-faint);
+    background: var(--background-modifier-hover);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: var(--font-monospace);
+    white-space: nowrap;
+}
+
+/* Hidden utility (used by clone modal for error message) */
+.clone-name-error.is-hidden {
+    display: none;
+}
+
+/* Disabled state for unchecked field name inputs */
+.clone-field-name-input--disabled {
+    opacity: 0.4;
+}

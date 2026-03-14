@@ -108,10 +108,38 @@ export function isEmptyValue(v: unknown): boolean {
 }
 
 /**
+ * YAML scalar values that must be quoted when written as plain strings,
+ * because YAML (1.1 and 1.2) would otherwise interpret them as booleans or
+ * null.  We cover both the YAML 1.2 core schema subset (true/false/null) and
+ * the YAML 1.1 extended set (yes/no/on/off) for maximum compatibility with
+ * the js-yaml version bundled by Obsidian.
+ */
+const YAML_RESERVED_WORDS = new Set([
+    // YAML 1.2 core
+    "true", "True", "TRUE",
+    "false", "False", "FALSE",
+    "null", "Null", "NULL",
+    "~",
+    // YAML 1.1 extensions (still common in the wild)
+    "yes", "Yes", "YES",
+    "no", "No", "NO",
+    "on", "On", "ON",
+    "off", "Off", "OFF",
+]);
+
+/**
+ * Escape a string for use inside a YAML double-quoted scalar.
+ * Backslashes must be escaped first, then double-quotes.
+ */
+function yamlDoubleQuote(s: string): string {
+    return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
  * Format a value for YAML frontmatter output
  */
 export function formatYamlValue(value: unknown): string {
-    if (value === null) return "null";
+    if (value === null || value === undefined) return "null";
     if (value === "") return '""';
     if (typeof value === "boolean") return value.toString();
     if (typeof value === "number") return value.toString();
@@ -122,21 +150,23 @@ export function formatYamlValue(value: unknown): string {
         );
     }
     if (typeof value === "string") {
-        if (/[:[\]{}#&*!|>'"%@`]/.test(value) || value.includes("\n")) {
-            return `"${value.replace(/"/g, '\\"')}"`;
+        // Quote if: reserved word, contains YAML-special characters, contains a
+        // newline, or has leading/trailing whitespace that a plain scalar would
+        // silently strip.
+        if (
+            YAML_RESERVED_WORDS.has(value) ||
+            /[:[\]{}#&*!|>'"%@`]/.test(value) ||
+            value.includes("\n") ||
+            value.trim() !== value
+        ) {
+            return yamlDoubleQuote(value);
         }
         return value;
     }
-    // return (value !== null && typeof value === "object")
-    //     ? JSON.stringify(value)
-    //     : String(value);
-    if (value === null || value === undefined) {
-        return String(value);
-    } else if (typeof value === "object") {
+    if (typeof value === "object") {
         return JSON.stringify(value);
-    } else {
-        return String(value as string | number | boolean | bigint | symbol);
     }
+    return String(value as string | number | boolean | bigint | symbol);
 }
 
 /**

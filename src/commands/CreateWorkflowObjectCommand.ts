@@ -63,9 +63,8 @@ export async function createNewWorkflowObject(
             }
         }
 
-        // Add title (escaped for YAML)
-        const escapedTitle = title.replace(/"/g, '\\"');
-        entries.push([settings.fields.title, `"${escapedTitle}"`]);
+        // Add title — formatYamlValue (called below) handles all quoting
+        entries.push([settings.fields.title, title]);
 
         // Sort according to settings
         const sortedEntries = sortEntries(entries, fieldOrder, settings.defaultFieldSort);
@@ -139,10 +138,8 @@ export async function createNewWorkflowObjectSimple(
         if (!title) return;
 
         const selected = getSelection(app);
-        const escapedTitle = title.replace(/"/g, '\\"');
-
         const content = `---
-${settings.fields.title}: "${escapedTitle}"
+${settings.fields.title}: ${formatYamlValue(title)}
 ${typeService.getTypeFieldName()}: ${selectedType}
 ---
 ${selected}`;

@@ -72,8 +72,9 @@ export async function curateVault(
 
 /**
  * Collect markdown files under a directory, optionally filtered.
+ * Exported so that other bulk commands can reuse the same collection logic.
  */
-function collectFiles(
+export function collectFiles(
     app: App,
     directory: string,
     recursive: boolean,

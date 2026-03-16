@@ -220,6 +220,36 @@ A notice confirms how many fields were added and how many were overwritten.
 
 ---
 
+### Bulk assign object type
+
+Assigns a chosen object type to a scoped set of notes in one operation, with a per-file preview and selection step before anything is written.
+
+**Step 1 — Configure**
+
+- **Object type** — the type value that will be written into the type field of every matched file.
+
+*Scope*
+- **Directory** — vault-relative folder to operate on, with autocomplete. Leave blank for the vault root.
+- **Recursive** — whether to include notes in subdirectories.
+
+*Filters*
+- **Include pattern** — regex that file paths must match (e.g. `^projects/`). Leave blank to include all.
+- **Exclude pattern** — regex that file paths must not match (e.g. `^system/`). Leave blank to exclude none.
+
+*Post-assign operations* (both default to on)
+- **Clean frontmatter** — standard (add missing, preserve everything else) or strict (add missing, remove undefined).
+- **Sort frontmatter** — schema order or alphabetical. When clean is also enabled, sorting is folded into the same pass.
+
+> Reshelve is intentionally absent. Renaming files is a separate, more consequential step — run **Curate vault** afterwards if you want to move the newly typed notes to their canonical paths.
+
+**Step 2 — Preview**
+
+A scrollable checklist shows every matched file. Files that already have a type display it as `← current-type` so you can spot re-assignments at a glance. All files are checked by default; use **Select all** / **Select none** or click individual checkboxes to refine the selection. The summary line updates live.
+
+Clicking **Assign** commits the operation on the checked files only.
+
+---
+
 ### Curate vault (clean / sort / reshelve)
 
 Batch-applies any combination of clean, sort, and reshelve operations across a scoped set of notes. A configuration dialog lets you specify:

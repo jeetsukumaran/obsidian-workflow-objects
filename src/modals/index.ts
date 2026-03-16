@@ -7,3 +7,7 @@ export { CloneObjectTypeModal } from "./CloneObjectTypeModal";
 export type { CloneObjectTypeResult } from "./CloneObjectTypeModal";
 export { CopyFieldsFromModal } from "./CopyFieldsFromModal";
 export type { CopyFieldsResult } from "./CopyFieldsFromModal";
+export { BulkAssignTypeModal } from "./BulkAssignTypeModal";
+export type { BulkAssignTypeOptions } from "./BulkAssignTypeModal";
+export { BulkAssignPreviewModal } from "./BulkAssignPreviewModal";
+export type { BulkAssignPreviewResult, FilePreviewEntry } from "./BulkAssignPreviewModal";

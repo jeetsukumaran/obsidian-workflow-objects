@@ -282,3 +282,68 @@
     display: inline;
     vertical-align: middle;
 }
+
+/* ── Bulk Assign Type Preview Modal ──────────────────────────────────────── */
+
+/* Summary line above the file list */
+.wfo-bulk-preview-summary {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    margin-bottom: 0.5em;
+}
+
+/* Scrollable file list */
+.wfo-bulk-preview-list {
+    max-height: 380px;
+    overflow-y: auto;
+    margin-bottom: 1em;
+    padding-right: 4px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+}
+
+/* Each file row */
+.wfo-bulk-preview-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    transition: background 60ms ease;
+}
+
+.wfo-bulk-preview-row:last-child {
+    border-bottom: none;
+}
+
+.wfo-bulk-preview-row:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* Checkbox */
+.wfo-bulk-preview-checkbox {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--interactive-accent);
+    margin-top: 1px;
+}
+
+/* File path */
+.wfo-bulk-preview-path {
+    flex: 1;
+    font-size: 0.88em;
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+    word-break: break-all;
+}
+
+/* Current-type annotation ("← article") shown when a file already has a type */
+.wfo-bulk-preview-current-type {
+    flex-shrink: 0;
+    font-size: 0.78em;
+    color: var(--text-faint);
+    font-style: italic;
+    white-space: nowrap;
+}

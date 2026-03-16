@@ -20,6 +20,7 @@ import {
     createWorkflowObjectCatalog,
     cloneObjectType,
     copyFieldsFrom,
+    bulkAssignType,
 } from "./commands";
 
 export default class WorkflowObjectsPlugin extends Plugin {
@@ -192,6 +193,19 @@ export default class WorkflowObjectsPlugin extends Plugin {
             name: "Copy fields from…",
             callback: () =>
                 copyFieldsFrom(this.app, this.settings, this.typeService),
+        });
+
+        // Bulk assign commands
+        this.addCommand({
+            id: "bulk-assign-type",
+            name: "Bulk assign object type",
+            callback: () =>
+                bulkAssignType(
+                    this.app,
+                    this.settings,
+                    this.typeService,
+                    this.frontmatterService
+                ),
         });
 
         // File-explorer context menu: show "Copy fields from…" on type definition files

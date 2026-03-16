@@ -11,7 +11,7 @@ import {
     BulkAssignPreviewModal,
     FilePreviewEntry,
 } from "../modals/BulkAssignPreviewModal";
-import { collectFiles } from "./VaultCurationCommand";
+import { collectFiles, reshelveFile } from "./VaultCurationCommand";
 
 /**
  * "Bulk assign object type" command.
@@ -35,6 +35,9 @@ import { collectFiles } from "./VaultCurationCommand";
  *        (preserveDefinedFields=true, no add/remove) so that the sort
  *        operates against the freshly assigned schema without firing
  *        individual per-file sort Notices.
+ *     d. Optionally reshelve: delegate to `reshelveFile` (the same helper
+ *        used by ReshelveCommand and curateVault) so the file is moved/renamed
+ *        to match its new type and title.
  *  6. Display a summary Notice.
  */
 export async function bulkAssignType(
@@ -100,7 +103,7 @@ export async function bulkAssignType(
             `${previewResult.selectedFiles.length} file(s)…`
     );
 
-    const totals = { assigned: 0, cleaned: 0, sorted: 0, errors: 0 };
+    const totals = { assigned: 0, cleaned: 0, sorted: 0, reshelved: 0, errors: 0 };
 
     // Build the CleanupOptions once — sort is folded in so we avoid a second
     // processFrontMatter call when both clean and sort are requested.
@@ -154,6 +157,18 @@ export async function bulkAssignType(
                 );
                 totals.sorted++;
             }
+
+            if (opts.runReshelve) {
+                // reshelveFile re-reads the file's frontmatter from the
+                // metadata cache, which will reflect the type we just wrote.
+                const moved = await reshelveFile(
+                    file,
+                    app,
+                    settings,
+                    typeService
+                );
+                if (moved) totals.reshelved++;
+            }
         } catch (err) {
             console.error(`[bulk-assign-type] Error on ${file.path}:`, err);
             totals.errors++;
@@ -169,6 +184,7 @@ function buildSummary(totals: {
     assigned: number;
     cleaned: number;
     sorted: number;
+    reshelved: number;
     errors: number;
 }): string {
     const parts: string[] = [
@@ -176,6 +192,7 @@ function buildSummary(totals: {
     ];
     if (totals.cleaned) parts.push(`cleaned ${totals.cleaned}`);
     if (totals.sorted && !totals.cleaned) parts.push(`sorted ${totals.sorted}`);
+    if (totals.reshelved) parts.push(`reshelved ${totals.reshelved}`);
     if (totals.errors)
         parts.push(`${totals.errors} error(s) — see console`);
     return parts.join(" · ");

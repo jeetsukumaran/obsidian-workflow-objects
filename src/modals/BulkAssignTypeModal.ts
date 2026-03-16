@@ -23,6 +23,8 @@ export interface BulkAssignTypeOptions {
     runSort: boolean;
     /** Sort mode */
     sortMode: "schema" | "alphabetical";
+    /** Move / rename files to match their new type and title after assigning */
+    runReshelve: boolean;
 }
 
 /**
@@ -59,6 +61,7 @@ export class BulkAssignTypeModal extends Modal {
             cleanMode: "standard",
             runSort: true,
             sortMode: settings.defaultFieldSort,
+            runReshelve: true,
             ...defaults,
         };
     }
@@ -223,6 +226,19 @@ export class BulkAssignTypeModal extends Modal {
             );
         sortModeRow.settingEl.setCssProps({ "padding-left": "2em" });
         sortModeRow.settingEl.toggle(this.options.runSort);
+
+        new Setting(contentEl)
+            .setName("Reshelve files")
+            .setDesc(
+                "Move / rename each file to match its new type and title after assigning"
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.options.runReshelve)
+                    .onChange((v) => {
+                        this.options.runReshelve = v;
+                    })
+            );
 
         // ── Actions ───────────────────────────────────────────────────────────
 

@@ -236,11 +236,12 @@ Assigns a chosen object type to a scoped set of notes in one operation, with a p
 - **Include pattern** — regex that file paths must match (e.g. `^projects/`). Leave blank to include all.
 - **Exclude pattern** — regex that file paths must not match (e.g. `^system/`). Leave blank to exclude none.
 
-*Post-assign operations* (both default to on)
+*Post-assign operations* (all default to on)
 - **Clean frontmatter** — standard (add missing, preserve everything else) or strict (add missing, remove undefined).
 - **Sort frontmatter** — schema order or alphabetical. When clean is also enabled, sorting is folded into the same pass.
+- **Reshelve files** — move and rename each file to match its new type and title, using the same path/filename mapping logic as the standalone Reshelve command.
 
-> Reshelve is intentionally absent. Renaming files is a separate, more consequential step — run **Curate vault** afterwards if you want to move the newly typed notes to their canonical paths.
+> All three post-assign operations default to **on**. Disable any you don't need before clicking Preview.
 
 **Step 2 — Preview**
 

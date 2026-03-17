@@ -35,9 +35,12 @@ import { collectFiles, reshelveFile } from "./VaultCurationCommand";
  *        (preserveDefinedFields=true, no add/remove) so that the sort
  *        operates against the freshly assigned schema without firing
  *        individual per-file sort Notices.
- *     d. Optionally reshelve: delegate to `reshelveFile` (the same helper
- *        used by ReshelveCommand and curateVault) so the file is moved/renamed
- *        to match its new type and title.
+ *     d. Optionally reshelve: delegate to `reshelveFile` passing `freshFm`
+ *        (the pre-write cache snapshot merged with the new type) so that the
+ *        path computation uses the correct type without depending on the
+ *        metadata cache, which may not have propagated the processFrontMatter
+ *        writes yet (Obsidian updates the cache asynchronously via file-watcher
+ *        events, not synchronously on the processFrontMatter await).
  *  6. Display a summary Notice.
  */
 export async function bulkAssignType(
@@ -133,6 +136,18 @@ export async function bulkAssignType(
 
     for (const file of previewResult.selectedFiles) {
         try {
+            // Snapshot the cached frontmatter BEFORE we write anything, then
+            // merge in the new type.  This gives reshelveFile a complete,
+            // cache-independent frontmatter record that is guaranteed to
+            // reflect the new type — avoiding the "destination already exists"
+            // error that arises when processFrontMatter returns before
+            // Obsidian's metadata cache has propagated the file change.
+            const cachedFm =
+                app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+            const freshFm: Record<string, unknown> = {
+                ...cachedFm,
+                [typeField]: opts.targetType,
+            };
             // Assign type field
             await app.fileManager.processFrontMatter(
                 file,
@@ -141,7 +156,6 @@ export async function bulkAssignType(
                 }
             );
             totals.assigned++;
-
             if (cleanOptions) {
                 // Clean (with sort folded in if requested)
                 await frontmatterService.cleanFrontmatter(file, cleanOptions);
@@ -159,13 +173,15 @@ export async function bulkAssignType(
             }
 
             if (opts.runReshelve) {
-                // reshelveFile re-reads the file's frontmatter from the
-                // metadata cache, which will reflect the type we just wrote.
+                // Pass freshFm so reshelveFile uses the correct (new) type
+                // without depending on the metadata cache, which may not yet
+                // reflect our processFrontMatter writes above.
                 const moved = await reshelveFile(
                     file,
                     app,
                     settings,
-                    typeService
+                    typeService,
+                    freshFm
                 );
                 if (moved) totals.reshelved++;
             }

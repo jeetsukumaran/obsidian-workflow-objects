@@ -144,14 +144,21 @@ async function runCleanOnFile(
 /**
  * Core reshelve logic, extracted so it can be called per-file without requiring
  * an active editor.  Returns true if the file was actually moved.
+ *
+ * @param frontmatterOverride  When provided, used instead of the metadata cache.
+ *   Pass this when the cache may be stale (e.g. immediately after a
+ *   processFrontMatter call whose cache update has not yet propagated).
  */
 export async function reshelveFile(
     file: TFile,
     app: App,
     settings: WorkflowObjectsSettings,
-    typeService: TypeService
+    typeService: TypeService,
+    frontmatterOverride?: Record<string, unknown>
 ): Promise<boolean> {
-    const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+    const frontmatter =
+        frontmatterOverride ??
+        (app.metadataCache.getFileCache(file)?.frontmatter ?? {});
     const typeField = typeService.getTypeFieldName();
     const typeValue = frontmatter[typeField] as string | undefined;
     const titleValue = frontmatter[settings.fields.title] as string | undefined;

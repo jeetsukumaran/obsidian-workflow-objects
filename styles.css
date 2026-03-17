@@ -222,8 +222,9 @@
     white-space: nowrap;
 }
 
-/* Hidden utility (used by clone modal for error message) */
-.clone-name-error.is-hidden {
+/* Hidden utility */
+.clone-name-error.is-hidden,
+.wfo-hidden {
     display: none;
 }
 

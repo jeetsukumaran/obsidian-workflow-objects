@@ -242,8 +242,7 @@ export class BulkAssignTypeModal extends Modal {
 
         // ── Actions ───────────────────────────────────────────────────────────
 
-        this.errorEl = contentEl.createEl("p", { cls: "mod-warning" });
-        this.errorEl.style.display = "none";
+        this.errorEl = contentEl.createEl("p", { cls: "mod-warning wfo-hidden" });
 
         new Setting(contentEl)
             .addButton((btn) =>
@@ -286,9 +285,9 @@ export class BulkAssignTypeModal extends Modal {
     private showError(msg: string): void {
         if (!this.errorEl) return;
         this.errorEl.textContent = msg;
-        this.errorEl.style.display = "";
+        this.errorEl.removeClass("wfo-hidden");
         window.setTimeout(() => {
-            if (this.errorEl) this.errorEl.style.display = "none";
+            if (this.errorEl) this.errorEl.addClass("wfo-hidden");
         }, 3000);
     }
 

@@ -34,9 +34,9 @@ test("default assignment updates metadata, filename, and folder in one action", 
     assert.equal(env.writes.length, 1);
     assert.equal(env.renames.length, 1);
     assert.deepEqual(Object.keys(env.frontmatter), [
-        "title", "zeta", "shared", "alpha", "global", "falseValue", "fileClass", "nested", "oldValue", "zero",
+        "title", "zeta", "shared", "alpha", "falseValue", "fileClass", "nested", "oldValue", "zero",
     ]);
-    assert.match(env.notices.at(-1), /Assigned to "project": added 3, removed 2/);
+    assert.match(env.notices.at(-1), /Assigned to "project": added 2, removed 2/);
     assert.ok((await env.app.vault.read(env.file)).endsWith(env.body));
 });
 
@@ -62,20 +62,20 @@ for (const removeFields of ["empty", "all", "never"]) {
                 for (const key of existingKeys.filter(key => key !== "fileClass")) {
                     assert.deepEqual(env.frontmatter[key], original[key]);
                 }
-                const addedKeys = addMissingFields ? ["zeta", "alpha", "global"] : [];
+                const addedKeys = addMissingFields ? ["zeta", "alpha"] : [];
                 if (addMissingFields) {
                     assert.equal(env.frontmatter.zeta, false);
                     assert.equal(env.frontmatter.alpha, "");
-                    assert.deepEqual(env.frontmatter.global, []);
+                    assert.equal(Object.hasOwn(env.frontmatter, "global"), false);
                 } else {
-                    for (const key of ["zeta", "alpha", "global"]) assert.equal(Object.hasOwn(env.frontmatter, key), false);
+                    for (const key of ["zeta", "alpha"]) assert.equal(Object.hasOwn(env.frontmatter, key), false);
                 }
                 const keys = Object.keys(env.frontmatter);
                 if (order === "append") assert.deepEqual(keys, [...existingKeys, ...addedKeys]);
                 if (order === "prepend") assert.deepEqual(keys, [...addedKeys, ...existingKeys]);
                 if (order === "alphabetical") assert.deepEqual(keys, [...existingKeys, ...addedKeys].sort());
                 if (order === "schema") {
-                    const schemaKeys = addMissingFields ? ["title", "zeta", "shared", "alpha", "global"] : ["title", "shared"];
+                    const schemaKeys = addMissingFields ? ["title", "zeta", "shared", "alpha"] : ["title", "shared"];
                     assert.deepEqual(keys, [...schemaKeys, ...existingKeys.filter(key => !schemaKeys.includes(key)).sort()]);
                 }
                 assert.equal(env.file.path, "inbox/20240102T0304--old-name.md");
@@ -176,7 +176,7 @@ test("strict removal still renames using the current custom title and date prope
     });
     await env.assign();
     assert.equal(env.file.path, "work/project/20200203T0405--Current custom title.md");
-    assert.deepEqual(env.frontmatter, { global: [], fileClass: "project" });
+    assert.deepEqual(env.frontmatter, { fileClass: "project" });
 });
 
 test("location rules that are disabled are not evaluated", async () => {
@@ -230,7 +230,7 @@ test("rejects malformed or non-mapping frontmatter without writing", async () =>
 });
 
 test("unreadable target schemas prevent assignment and deletion", async () => {
-    const env = await assignmentHost({ schemas: { project: {} }, options: { removeFields: "all" } });
+    const env = await assignmentHost({ schemas: { project: null }, options: { removeFields: "all" } });
     await env.assign();
     assert.deepEqual(env.frontmatter, original);
     assert.match(env.notices.at(-1), /No field schema available/);
@@ -251,17 +251,18 @@ for (const failure of ["read", "save", "folder", "write"]) {
         await env.assign();
         assert.deepEqual(env.frontmatter, original);
         assert.equal(env.writes.length, 0);
-        assert.equal(env.renames.length, 0);
+        assert.equal(env.renames.length, failure === "write" ? 2 : 0);
+        assert.equal(env.file.path, "inbox/20240102T0304--old-name.md");
         assert.match(env.notices.at(-1), /Could not assign object type/);
     });
 }
 
-test("rename failure explicitly reports that the metadata assignment succeeded", async () => {
+test("rename failure leaves all metadata untouched", async () => {
     const env = await assignmentHost({ failure: "rename" });
     await env.assign();
-    assert.equal(env.frontmatter.fileClass, "project");
+    assert.deepEqual(env.frontmatter, original);
     assert.equal(env.file.path, "inbox/20240102T0304--old-name.md");
-    assert.match(env.notices.at(-1), /Type and metadata updated, but file location could not be changed/);
+    assert.match(env.notices.at(-1), /Could not assign object type: Rename failed/);
 });
 
 test("concurrent metadata edits are preserved and invalidate the prepared assignment", async () => {
@@ -270,7 +271,8 @@ test("concurrent metadata edits are preserved and invalidate the prepared assign
     assert.equal(env.frontmatter.title, "Concurrent edit");
     assert.equal(env.frontmatter.fileClass, "old");
     assert.equal(env.writes.length, 0);
-    assert.equal(env.renames.length, 0);
+    assert.equal(env.renames.length, 2);
+    assert.equal(env.file.path, "inbox/20240102T0304--old-name.md");
     assert.match(env.notices.at(-1), /note changed/);
 });
 

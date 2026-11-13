@@ -1,292 +1,269 @@
 import { App, TFile, Notice } from "obsidian";
-import {
-    WorkflowObjectsSettings,
-    TypeFieldInfo,
-    TypeDefinitionFrontmatter,
-    FieldDefinition,
-} from "../types";
+import { WorkflowObjectsSettings, TypeFieldInfo, TypeDefinitionFrontmatter, FieldDefinition, SchemaResolution } from "../types";
 import { getDefaultValueForType } from "../utils/helpers";
+import { resolveDefinition, stringList } from "../schema/definitions";
 
-/** Default Metadata Menu fileClass alias used when nothing else is available */
-const MM_DEFAULT_TYPE_ALIAS = "fileClass";
+type Source = Exclude<WorkflowObjectsSettings["schemaSource"], "auto">;
+interface SchemaPlugin {
+    settings?: Record<string, unknown>;
+    api?: { version?: string; getSchema?: (name: string) => Promise<{ fields: FieldDefinition[] } | null> };
+}
+interface Bookmark { type: string; title?: string; path?: string; items?: Bookmark[] }
 
-/**
- * Service for interacting with Metadata Menu type definitions
- */
+/** Owns provider selection and complete root schemas for every metadata operation. */
 export class TypeService {
-    constructor(
-        private app: App,
-        private settings: WorkflowObjectsSettings
-    ) {}
+    constructor(private app: App, private settings: WorkflowObjectsSettings) {}
 
-    /** Access the live Metadata Menu plugin instance (null if not installed) */
-    private getMmPlugin(): Record<string, unknown> | null {
-        const plugins = (this.app as unknown as { plugins?: { plugins?: Record<string, unknown> } }).plugins?.plugins;
-        return (plugins?.["metadata-menu"] as Record<string, unknown>) ?? null;
+    private plugin(source: Source): SchemaPlugin | undefined {
+        const plugins = (this.app as unknown as { plugins?: { plugins?: Record<string, SchemaPlugin> } }).plugins?.plugins;
+        return plugins?.[source];
     }
 
-    /**
-     * Resolve the effective frontmatter field name used to identify a note's type.
-     * Priority: user setting (non-empty) → MM fileClassAlias → "fileClass"
-     */
+    getSource(): Source {
+        if (this.settings.schemaSource !== "auto") return this.settings.schemaSource;
+        return this.plugin("fileclass") ? "fileclass" : this.plugin("metadata-menu") ? "metadata-menu" : "standalone";
+    }
+
+    private providerSettings(): Record<string, unknown> {
+        return this.plugin(this.getSource())?.settings ?? {};
+    }
+
+    /** Captured by edit plans so schema or binding changes cannot authorize stale removal. */
+    schemaSignature(file: TFile): string {
+        return JSON.stringify([
+            this.getSource(), this.getTypeFieldName(), this.getTypesPath(), this.settings.dateFormat,
+            this.providerSettings().globalFileClass, this.providerSettings().fileClassQueries,
+            this.typeFiles().map(definition => [definition.path, this.getTypeFrontmatter(this.nameOf(definition))]),
+            this.app.metadataCache.getFileCache(file)?.tags, this.bookmarkGroups(file.path),
+        ]);
+    }
+
     getTypeFieldName(): string {
-        if (this.settings.fields.type) {
-            return this.settings.fields.type;
-        }
-        const mm = this.getMmPlugin();
-        const mmSettings = mm?.["settings"] as Record<string, unknown> | undefined;
-        const mmAlias = mmSettings?.["fileClassAlias"];
-        return (typeof mmAlias === "string" && mmAlias) ? mmAlias : MM_DEFAULT_TYPE_ALIAS;
+        const alias = this.providerSettings().fileClassAlias;
+        return this.settings.fields.type || (typeof alias === "string" && alias ? alias : "fileClass");
     }
 
-    /**
-     * Return MM's global preset fields as FieldDefinition[].
-     * Returns [] when MM is not installed or has no preset fields.
-     */
-    getPresetFields(): FieldDefinition[] {
-        const mm = this.getMmPlugin();
-        const mmSettings = mm?.["settings"] as Record<string, unknown> | undefined;
-        const presets: unknown = mmSettings?.["presetFields"];
-        if (!Array.isArray(presets)) return [];
-        return presets
-            .filter((p): p is Record<string, unknown> =>
-                typeof p === "object" && p !== null && typeof (p as Record<string, unknown>).name === "string"
-            )
-            .map((p) => ({
-                id: typeof p.id === "string" ? p.id : undefined,
-                name: p.name as string,
-                type: typeof p.type === "string" ? p.type : "Input",
-                options: typeof p.options === "object" && p.options !== null
-                    ? (p.options as Record<string, unknown>)
-                    : {},
-            }));
-    }
-
-    /**
-     * Resolve the types path, checking Metadata Menu plugin settings first
-     */
     getTypesPath(): string {
-        if (this.settings.typesPath) {
-            return this.settings.typesPath;
-        }
-        const mm = this.getMmPlugin();
-        const mmSettings = mm?.["settings"] as Record<string, unknown> | undefined;
-        if (mmSettings?.["classFilesPath"]) {
-            return (mmSettings["classFilesPath"] as string).replace(/\/$/, "");
-        }
-        return this.settings.typesPathFallback;
+        const configured = this.providerSettings().classFilesPath;
+        const path = this.settings.typesPath || (typeof configured === "string" ? configured : "") || this.settings.typesPathFallback;
+        return path.replace(/^\/+|\/+$/g, "");
     }
 
-    /**
-     * Get list of type names from the types definition folder
-     */
+    private typeFiles(): TFile[] {
+        const prefix = this.getTypesPath() + "/";
+        return this.app.vault.getMarkdownFiles().filter(file => file.path.startsWith(prefix));
+    }
+
     getTypeNames(): string[] | null {
-        const typesPath = this.getTypesPath();
-        const folder = this.app.vault.getAbstractFileByPath(typesPath);
-
-        if (!folder) {
-            new Notice(`Types folder not found: ${typesPath}`);
-            return null;
-        }
-
-        const children = this.app.vault.getMarkdownFiles().filter((f) =>
-            f.path.startsWith(typesPath + "/") &&
-            !f.path.slice(typesPath.length + 1).includes("/")
-        );
-
-        const files = children.map((f) => f.basename);
-        files.sort((a, b) => a.localeCompare(b));
-
-        if (!files.length) {
-            new Notice(`No workflow types found in ${typesPath}`);
-            return null;
-        }
-
-        return files;
+        const names = this.typeFiles().map(file => this.nameOf(file)).sort((a, b) => a.localeCompare(b));
+        if (!names.length) { new Notice(`No workflow types found in ${this.getTypesPath()}`); return null; }
+        return names;
     }
 
-    /**
-     * Get the type definition file
-     */
+    private nameOf(file: TFile): string {
+        return file.path.slice(this.getTypesPath().length + 1, -3);
+    }
+
     getTypeFile(typeName: string): TFile | null {
-        const typesPath = this.getTypesPath();
-        const filePath = `${typesPath}/${typeName}.md`;
-        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (!typeName || typeName.split(/[\\/]/).some(part => part === ".." || part === "." || !part)) return null;
+        const file = this.app.vault.getAbstractFileByPath(`${this.getTypesPath()}/${typeName}.md`);
         return file instanceof TFile ? file : null;
     }
 
-    /**
-     * Get the frontmatter from a type definition file
-     */
     getTypeFrontmatter(typeName: string): TypeDefinitionFrontmatter | null {
         const file = this.getTypeFile(typeName);
-        if (!file) return null;
-
-        const cache = this.app.metadataCache.getFileCache(file);
-        return (cache?.frontmatter as TypeDefinitionFrontmatter) || null;
+        const cache = file ? this.app.metadataCache.getFileCache(file) : null;
+        return cache ? cache.frontmatter ?? {} : null;
     }
 
-    /**
-     * Get field definitions array from a type
-     */
+    /** Own declarations for schema editing; note operations use resolved schemas. */
     getTypeFieldDefinitions(typeName: string): FieldDefinition[] | null {
-        const fm = this.getTypeFrontmatter(typeName);
-        return fm?.fields || null;
+        const fields = this.getTypeFrontmatter(typeName)?.fields;
+        return Array.isArray(fields) ? fields : null;
     }
 
-    /**
-     * Get the set of field names, defaults, and order for a type.
-     * Type-specific fields take precedence; MM preset fields are merged in for
-     * any name not already defined by the type.
-     */
-    getTypeFieldInfo(typeName: string): TypeFieldInfo | null {
-        const fields = this.getTypeFieldDefinitions(typeName);
-        if (!fields || !Array.isArray(fields)) return null;
-
-        const definedFields = new Set<string>();
-        const fieldDefaults = new Map<string, unknown>();
-        const fieldOrder: string[] = [];
-
-        // 1. Type-specific fields
-        for (const field of fields) {
-            if (field.name) {
-                definedFields.add(field.name);
-                fieldDefaults.set(
-                    field.name,
-                    getDefaultValueForType(field.type, field.options || {}, this.settings.dateFormat)
-                );
-                fieldOrder.push(field.name);
-            }
-        }
-
-        // 2. MM preset fields not already covered by the type
-        for (const preset of this.getPresetFields()) {
-            if (preset.name && !definedFields.has(preset.name)) {
-                definedFields.add(preset.name);
-                fieldDefaults.set(
-                    preset.name,
-                    getDefaultValueForType(preset.type, preset.options || {}, this.settings.dateFormat)
-                );
-                fieldOrder.push(preset.name);
-            }
-        }
-
-        return { definedFields, fieldDefaults, fieldOrder };
+    async getTypeFieldInfo(typeName: string): Promise<TypeFieldInfo | null> {
+        const result = await this.resolveTypeInfo(typeName);
+        if (!result.schemaComplete) throw new Error(result.issues.join("; "));
+        return result.typeInfo;
     }
 
-    /**
-     * Get the sort order for frontmatter fields based on type definition.
-     * Prefers fieldsOrder if available, falls back to fields array order.
-     * MM preset fields are appended for any name not already in the order.
-     */
-    getFieldSortOrder(typeName: string): string[] | null {
-        const fm = this.getTypeFrontmatter(typeName);
-        if (!fm?.fields) return null;
-
-        let orderedNames: string[] = [];
-
-        // If fieldsOrder exists, use it to map IDs to names
-        if (fm.fieldsOrder && Array.isArray(fm.fieldsOrder)) {
-            const idToName = new Map<string, string>();
-            for (const field of fm.fields) {
-                if (field.id && field.name) idToName.set(field.id, field.name);
-            }
-            for (const id of fm.fieldsOrder) {
-                const name = idToName.get(id);
-                if (name) orderedNames.push(name);
-            }
-        }
-
-        // Fallback: use the order from the fields array itself
-        if (!orderedNames.length) {
-            orderedNames = fm.fields
-                .map((f) => f.name)
-                .filter((name): name is string => !!name);
-        }
-
-        // Append MM preset fields not already present
-        const inOrder = new Set(orderedNames);
-        for (const preset of this.getPresetFields()) {
-            if (preset.name && !inOrder.has(preset.name)) {
-                orderedNames.push(preset.name);
-            }
-        }
-
-        return orderedNames.length > 0 ? orderedNames : null;
+    async getFieldSortOrder(typeName: string): Promise<string[] | null> {
+        return (await this.getTypeFieldInfo(typeName))?.fieldOrder ?? null;
     }
 
+    async resolveTypeInfo(typeValue: unknown): Promise<SchemaResolution> {
+        return this.resolveNames(stringList(typeValue), false);
+    }
 
-    /**
-     * Build a TypeFieldInfo from MM preset fields only.
-     * Returns null if there are no preset fields.
-     */
-    getPresetFieldInfo(): TypeFieldInfo | null {
-        const presets = this.getPresetFields();
-        if (!presets.length) return null;
+    /** Evaluate explicit and contextual classes against the proposed metadata and path. */
+    async resolveNoteSchema(file: TFile, fm: Record<string, unknown>, path = file.path): Promise<SchemaResolution> {
+        const binding = this.noteBinding(file, fm, path);
+        const result = await this.resolveNames(binding.names, this.isTypeDefinitionFile(file));
+        if (binding.tagBound && Object.prototype.hasOwnProperty.call(fm, "tags")) result.protectedFields.add("tags");
+        result.issues.push(...binding.issues);
+        result.schemaComplete = result.issues.length === 0;
+        return result;
+    }
 
-        const definedFields = new Set<string>();
-        const fieldDefaults = new Map<string, unknown>();
-        const fieldOrder: string[] = [];
+    getNoteTypeNames(file: TFile, fm: Record<string, unknown>): string[] {
+        return this.withGlobal(this.noteBinding(file, fm, file.path).names, this.isTypeDefinitionFile(file));
+    }
 
-        for (const preset of presets) {
-            if (preset.name) {
-                definedFields.add(preset.name);
-                fieldDefaults.set(
-                    preset.name,
-                    getDefaultValueForType(preset.type, preset.options || {}, this.settings.dateFormat)
-                );
-                fieldOrder.push(preset.name);
+    getPrimaryType(file: TFile, fm: Record<string, unknown>): string | undefined {
+        const explicit = stringList(fm[this.getTypeFieldName()]);
+        const names = this.getNoteTypeNames(file, fm);
+        const global = this.providerSettings().globalFileClass;
+        return explicit[0] ?? names.find(name => name !== global) ?? names[0];
+    }
+
+    getFilesOfType(typeName: string): TFile[] {
+        return this.app.vault.getMarkdownFiles().filter(file => !this.isTypeDefinitionFile(file) &&
+            this.getNoteTypeNames(file, this.app.metadataCache.getFileCache(file)?.frontmatter ?? {}).includes(typeName));
+    }
+
+    private noteBinding(file: TFile, fm: Record<string, unknown>, path: string): { names: string[]; tagBound: boolean; issues: string[] } {
+        const source = this.getSource();
+        const names = stringList(fm[this.getTypeFieldName()]);
+        const tags = [...stringList(fm.tags), ...(this.app.metadataCache.getFileCache(file)?.tags ?? []).map(tag => tag.tag)]
+            .map(tag => tag.replace(/^#/, ""));
+        const folder = path.slice(0, Math.max(0, path.lastIndexOf("/"))) || "/";
+        const bookmarks = this.bookmarkGroups(file.path);
+        const tagMap = new Map<string, string>();
+        const paths = new Map<string, string>();
+        const groups = new Map<string, string>();
+        const issues: string[] = [];
+        const typeValue = fm[this.getTypeFieldName()];
+        if (typeValue != null && typeof typeValue !== "string" &&
+            !(Array.isArray(typeValue) && typeValue.every(value => typeof value === "string"))) {
+            issues.push("The note's type field must contain a class name or a list of class names");
+        }
+        // A missing declaration may have bound this note. Never infer a complete schema from it.
+        for (const definition of this.typeFiles()) {
+            const name = this.nameOf(definition);
+            const schema = this.getTypeFrontmatter(name);
+            if (!schema) { issues.push(`Schema not yet available: ${name}`); continue; }
+            const mapped = typeof schema.mapWithTag === "string" ? schema.mapWithTag.toLowerCase() === "true" : !!schema.mapWithTag;
+            for (const tag of [...(mapped ? [name] : []), ...stringList(schema.tagNames)]) {
+                if (!tag.includes(" ")) tagMap.set(source === "metadata-menu" ? tag : tag.toLowerCase(), name);
+            }
+            for (const prefix of stringList(schema.filesPaths)) paths.set(prefix, name);
+            for (const group of stringList(schema.bookmarksGroups)) groups.set(group, name);
+        }
+        let tagBound = false;
+        for (const rawTag of tags) {
+            const parts = (source === "metadata-menu" ? rawTag : rawTag.toLowerCase()).split("/");
+            do {
+                const name = tagMap.get(parts.join("/"));
+                if (name) { names.push(name); tagBound = true; }
+                parts.pop();
+            } while (parts.length && source !== "metadata-menu");
+        }
+        for (const [prefix, name] of paths) {
+            // Both integrations use literal prefix matching, including overlapping folder names.
+            if (folder === prefix || folder.startsWith(prefix)) names.push(name);
+        }
+        for (const group of bookmarks) {
+            const name = groups.get(group);
+            if (name) names.push(name);
+        }
+        if (source === "metadata-menu" && Array.isArray(this.providerSettings().fileClassQueries) &&
+            (this.providerSettings().fileClassQueries as unknown[]).length) {
+            issues.push("Metadata Menu query bindings cannot be evaluated for a proposed note; metadata removal is disabled");
+        }
+        return { names, tagBound, issues };
+    }
+
+    private withGlobal(input: string[], isDefinition: boolean): string[] {
+        const names = [...new Set(input)];
+        const global = this.providerSettings().globalFileClass;
+        if (!isDefinition && typeof global === "string" && global && !names.includes(global) &&
+            (this.getSource() !== "metadata-menu" || !names.length)) names.unshift(global);
+        return names;
+    }
+
+    private async resolveNames(input: string[], isDefinition: boolean): Promise<SchemaResolution> {
+        const source = this.getSource();
+        const names = this.withGlobal(input, isDefinition);
+        const issues: string[] = [];
+        if (source !== "standalone" && !this.plugin(source)) issues.push(`Schema integration is not enabled: ${source}`);
+        const fields = new Map<string, FieldDefinition>();
+        for (const name of names) {
+            const resolved = resolveDefinition(name, value => this.getTypeFrontmatter(value), source === "metadata-menu");
+            issues.push(...resolved.issues);
+            let own = resolved.fields;
+            const plugin = this.plugin(source);
+            const folder = plugin?.settings?.classFilesPath;
+            // The public API supplies resolved order and inheritance. Explicit folder overrides
+            // can point elsewhere, in which case the standalone file reader is authoritative.
+            if (source === "fileclass" && plugin?.api?.getSchema && typeof folder === "string" &&
+                folder.replace(/^\/+|\/+$/g, "") === this.getTypesPath() && !resolved.issues.length) {
+                try {
+                    const schema = await plugin.api.getSchema(name);
+                    if (!schema || !Array.isArray(schema.fields)) throw new Error("Schema index is not ready");
+                    own = schema.fields.filter(field => !field.path);
+                    const expected = new Set(resolved.fields.map(field => field.name));
+                    if (own.length !== expected.size || own.some(field => !expected.has(field.name))) {
+                        throw new Error("Schema index is out of date");
+                    }
+                } catch (error) {
+                    issues.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+            for (const field of own) {
+                if (source === "metadata-menu" && fields.has(field.name)) continue;
+                if (source !== "metadata-menu") fields.delete(field.name);
+                fields.set(field.name, field);
             }
         }
-
-        return { definedFields, fieldDefaults, fieldOrder };
-    }
-
-    /**
-     * Resolve the effective TypeFieldInfo for a note, and whether the schema is
-     * considered complete (i.e. safe to remove fields not in the schema).
-     *
-     * - typeValue present + fileclass found  → full info (type fields + presets), complete
-     * - typeValue present + fileclass missing → preset-only info, NOT complete
-     *   (we know the type exists but can't see its fields — don't remove unknowns)
-     * - no typeValue                          → preset-only info, complete
-     *   (presets are the entire known schema for untyped notes)
-     */
-    resolveTypeInfo(typeValue: string | undefined): {
-        typeInfo: TypeFieldInfo | null;
-        schemaComplete: boolean;
-    } {
-        if (typeValue) {
-            const typeInfo = this.getTypeFieldInfo(typeValue);
-            if (typeInfo) {
-                return { typeInfo, schemaComplete: true };
-            }
-            // Fileclass not found — fall back to presets, mark incomplete
-            return { typeInfo: this.getPresetFieldInfo(), schemaComplete: false };
+        const global = this.providerSettings().globalFileClass;
+        if (source === "metadata-menu" && !isDefinition && !fields.size && typeof global === "string" && global && !names.includes(global)) {
+            return this.resolveNames([...names, global], true);
         }
-        // No type value — presets are the full known schema
-        return { typeInfo: this.getPresetFieldInfo(), schemaComplete: true };
+        const rootFields = [...fields.values()];
+        const defaults = new Map(rootFields.map(field => [field.name, this.defaultValue(field)]));
+        return {
+            typeNames: names,
+            typeInfo: names.length ? { definedFields: new Set(fields.keys()), fieldDefaults: defaults, fieldOrder: [...fields.keys()], fields: rootFields } : null,
+            schemaComplete: issues.length === 0,
+            issues,
+            protectedFields: new Set([this.getTypeFieldName()]),
+        };
     }
 
-    /**
-     * Check if a type exists
-     */
-    typeExists(typeName: string): boolean {
-        return this.getTypeFile(typeName) !== null;
+    private defaultValue(field: FieldDefinition): unknown {
+        const type = field.type ? field.type[0].toUpperCase() + field.type.slice(1) : "Input";
+        if (this.getSource() !== "fileclass") return getDefaultValueForType(type, field.options ?? {}, this.settings.dateFormat);
+        if (["Object", "JSON", "YAML"].includes(type)) return {};
+        if (["Multi", "MultiInput", "CycleDuration", "MultiFile", "MultiMedia", "ObjectList"].includes(type)) return [];
+        return "";
     }
 
-    /**
-     * Return true when `file` is a top-level Markdown file inside the types
-     * folder — i.e. it is a Metadata Menu fileClass / type definition file.
-     *
-     * Used by the context-menu hook to decide whether to show the
-     * "Copy fields from…" item.
-     */
+    private bookmarkGroups(path: string): string[] {
+        const internal = this.app as unknown as { internalPlugins?: { plugins?: { bookmarks?: {
+            instance?: { getBookmarks?: () => Bookmark[]; items?: Bookmark[] };
+        } } } };
+        const instance = internal.internalPlugins?.plugins?.bookmarks?.instance;
+        const groups = new Set<string>();
+        const walk = (items: Bookmark[], parents: string[]) => {
+            for (const item of items) {
+                if (item.type === "group") {
+                    const title = this.getSource() === "metadata-menu" ? item.title ?? "" : (item.title ?? "").trim();
+                    if (title) walk(item.items ?? [], [...parents, title]);
+                }
+                else if (item.path === path) {
+                    if (this.getSource() === "metadata-menu") groups.add(parents.join("/") || "/");
+                    else parents.forEach((_, index) => groups.add(parents.slice(0, index + 1).join("/")));
+                }
+            }
+        };
+        walk(instance?.getBookmarks?.() ?? instance?.items ?? [], []);
+        return [...groups];
+    }
+
+    typeExists(typeName: string): boolean { return this.getTypeFile(typeName) !== null; }
+
     isTypeDefinitionFile(file: TFile): boolean {
-        if (file.extension !== "md") return false;
-        const typesPath = this.getTypesPath();
-        // Must be a direct child of the types folder (no sub-folder)
-        const expectedParent = typesPath.replace(/\/$/, "");
-        return file.parent?.path === expectedParent;
+        return file.extension === "md" && file.path.startsWith(this.getTypesPath() + "/");
     }
 }

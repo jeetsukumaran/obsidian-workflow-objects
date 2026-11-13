@@ -32,33 +32,6 @@ export function getActiveFileWithMeta(
 }
 
 /**
- * Find all markdown files where a frontmatter field equals a given value
- * @param app Obsidian app instance
- * @param fieldName The frontmatter field to filter on
- * @param value The value to match
- * @param sortDirection Sort direction: 'asc' for ascending (A-Z), 'desc' for descending (Z-A)
- */
-export function getFilesByField(
-    app: App,
-    fieldName: string,
-    value: string,
-    sortDirection: "asc" | "desc" = "asc"
-): TFile[] {
-    const files = app.vault
-        .getMarkdownFiles()
-        .filter(
-            (f) =>
-                app.metadataCache.getFileCache(f)?.frontmatter?.[fieldName] ===
-                value
-        );
-
-    if (sortDirection === "desc") {
-        return files.sort((a, b) => b.path.localeCompare(a.path));
-    }
-    return files.sort((a, b) => a.path.localeCompare(b.path));
-}
-
-/**
  * Open a file in the current leaf
  */
 export async function openFile(app: App, file: TFile): Promise<void> {
@@ -256,7 +229,15 @@ export function getDefaultValueForType(
         case "Cycle":
         case "File":
             return null;
+        case "Object":
+        case "JSON":
+        case "YAML":
+            return {};
         case "Multi":
+        case "MultiInput":
+        case "MultiMedia":
+        case "ObjectList":
+        case "CycleDuration":
         case "MultiFile":
             return [];
         default:

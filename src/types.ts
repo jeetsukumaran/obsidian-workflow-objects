@@ -4,9 +4,11 @@ import { TFile } from "obsidian";
  * Plugin settings interface
  */
 export interface WorkflowObjectsSettings {
-    /** Path to type definitions (null = read from Metadata Menu) */
+    /** Auto prefers FileClass, then Metadata Menu, then standalone schemas. */
+    schemaSource: "auto" | "fileclass" | "metadata-menu" | "standalone";
+    /** Path to type definitions (null = read from the selected integration). */
     typesPath: string | null;
-    /** Fallback path if Metadata Menu not available */
+    /** Standalone schema folder when no explicit path is set. */
     typesPathFallback: string;
     /** Frontmatter field names */
     fields: FieldNames;
@@ -84,6 +86,8 @@ export interface CleanupOptions {
     preserveDefinedFields: boolean;
     /** Delete fields not in schema (even if they have values) */
     removeUndefinedFields: boolean;
+    /** False for sorting alone; otherwise remove empty unknown fields when the schema is complete. */
+    removeEmptyUndefinedFields?: boolean;
     /** Add missing fields from schema with defaults */
     addMissingFields: boolean;
     /** Sort fields: "schema" for type definition order, "alphabetical" for A-Z, "none" to skip sorting */
@@ -94,7 +98,7 @@ export interface CleanupOptions {
 export type MissingFrontmatterMode = "alphabetical" | "schema" | "append" | "prepend";
 
 /**
- * Type field information extracted from Metadata Menu definitions
+ * Resolved root fields from fileClass definitions.
  */
 export interface TypeFieldInfo {
     /** Set of field names defined in the type */
@@ -103,6 +107,17 @@ export interface TypeFieldInfo {
     fieldDefaults: Map<string, unknown>;
     /** Ordered list of field names */
     fieldOrder: string[];
+    /** Root definitions in effective order, including inherited fields. */
+    fields: FieldDefinition[];
+}
+
+/** A complete schema is required before removing any unknown property. */
+export interface SchemaResolution {
+    typeInfo: TypeFieldInfo | null;
+    typeNames: string[];
+    schemaComplete: boolean;
+    issues: string[];
+    protectedFields: Set<string>;
 }
 
 /**
@@ -113,6 +128,8 @@ export interface FieldDefinition {
     name: string;
     type: string;
     options?: Record<string, unknown>;
+    /** Parent field IDs, separated by four underscores; absent/empty at root. */
+    path?: string;
 }
 
 /**
@@ -157,6 +174,7 @@ export interface CleanupStats {
  * Default settings
  */
 export const DEFAULT_SETTINGS: WorkflowObjectsSettings = {
+    schemaSource: "auto",
     typesPath: null,
     typesPathFallback: "system/schema/content-types",
     fields: {

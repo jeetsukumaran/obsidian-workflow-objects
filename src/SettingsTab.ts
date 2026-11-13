@@ -37,12 +37,30 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName("Type definitions").setHeading();
 
         new Setting(containerEl)
+            .setName("Schema source")
+            // Plugin names retain their published capitalization.
+            // eslint-disable-next-line obsidianmd/ui/sentence-case
+            .setDesc("Automatic selection prefers Fileclass, then Metadata Menu, then standalone schema files.")
+            .addDropdown(dropdown => dropdown
+                .addOption("auto", "Automatic")
+                .addOption("fileclass", "Fileclass")
+                // eslint-disable-next-line obsidianmd/ui/sentence-case -- Published plugin name.
+                .addOption("metadata-menu", "Metadata Menu")
+                .addOption("standalone", "Standalone")
+                .setValue(this.plugin.settings.schemaSource)
+                .onChange(async value => {
+                    this.plugin.settings.schemaSource = value as typeof this.plugin.settings.schemaSource;
+                    await this.plugin.saveSettings();
+                    this.display();
+                }));
+
+        new Setting(containerEl)
             .setName("Types path")
             .setDesc(
                 "Vault path to a folder of type-definition notes. " +
                 "Each note's filename becomes a type name and its frontmatter fields " +
                 "define the schema for workflow objects of that type. " +
-                "Leave empty to auto-read from the Metadata Menu plugin."
+                "Leave empty to read from the selected schema integration."
             )
             .addText((text) =>
                 text
@@ -57,7 +75,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Fallback types path")
             .setDesc(
-                "Path used when Metadata Menu is not installed and no Types path is set. " +
+                "Folder used for standalone schemas when no types path is set. " +
                 "Defaults to '" + DEFAULT_SETTINGS.typesPathFallback + "'."
             )
             .addText((text) =>
@@ -79,7 +97,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             ? "Frontmatter field that identifies a note's workflow object type. " +
               "Used by navigation, reshelving, and open-by-type commands."
             : "Frontmatter field that identifies a note's workflow object type. " +
-              `Auto-detected as "${resolvedTypeField}" from Metadata Menu. ` +
+              `Resolved as "${resolvedTypeField}" using the selected schema source. ` +
               "Set manually to override.";
 
         new Setting(containerEl)

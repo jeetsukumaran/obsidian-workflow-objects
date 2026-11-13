@@ -4,7 +4,6 @@ import { TypeService } from "../services/TypeService";
 import { SuggesterModal, StringSuggesterModal } from "../modals";
 import {
     getActiveFileWithMeta,
-    getFilesByField,
     openFile,
 } from "../utils/helpers";
 
@@ -18,19 +17,15 @@ export async function navigate(
     typeService: TypeService,
     direction: 1 | -1
 ): Promise<void> {
-    const typeField = typeService.getTypeFieldName();
-    const result = getActiveFileWithMeta(app, typeField);
+    const result = getActiveFileWithMeta(app);
     if (!result) return;
 
     const { file, frontmatter } = result;
-    const typeValue = frontmatter[typeField] as string;
+    const typeValue = typeService.getPrimaryType(file, frontmatter);
+    if (!typeValue) { new Notice("No object type applies to this note"); return; }
 
-    const matches = getFilesByField(
-        app,
-        typeField,
-        typeValue,
-        settings.objectSortDirection
-    );
+    const matches = typeService.getFilesOfType(typeValue)
+        .sort((a, b) => settings.objectSortDirection === "desc" ? b.path.localeCompare(a.path) : a.path.localeCompare(b.path));
     const idx = matches.findIndex((f) => f.path === file.path);
 
     if (idx === -1) {
@@ -99,12 +94,8 @@ export async function openWorkflowObject(
     if (!selectedType) return;
 
     // Get files of that type (sorted according to settings)
-    const matchingFiles = getFilesByField(
-        app,
-        typeField,
-        selectedType,
-        settings.objectSortDirection
-    );
+    const matchingFiles = typeService.getFilesOfType(selectedType)
+        .sort((a, b) => settings.objectSortDirection === "desc" ? b.path.localeCompare(a.path) : a.path.localeCompare(b.path));
 
     if (!matchingFiles.length) {
         new Notice(`No notes with ${typeField}: "${selectedType}"`);

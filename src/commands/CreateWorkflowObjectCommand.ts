@@ -6,7 +6,6 @@ import {
     getSelection,
     openFile,
     formatYamlValue,
-    getDefaultValueForType,
     sortEntries,
 } from "../utils/helpers";
 import {
@@ -41,26 +40,11 @@ export async function createNewWorkflowObject(
         const title = await inputModal.openAndGetValue();
         if (!title) return;
 
-        // Get field definitions and sort order
-        const fields = typeService.getTypeFieldDefinitions(selectedType);
-        const fieldOrder = typeService.getFieldSortOrder(selectedType);
-        const entries: [string, unknown][] = [];
-
-        // Add content-type field
-        entries.push([typeService.getTypeFieldName(), selectedType]);
-
-        if (fields && Array.isArray(fields)) {
-            for (const field of fields) {
-                const name = field.name;
-                if (name === settings.fields.title) continue; // Handle title separately
-
-                const defaultValue = getDefaultValueForType(
-                    field.type,
-                    field.options || {},
-                    settings.dateFormat
-                );
-                entries.push([name, defaultValue]);
-            }
+        const typeInfo = await typeService.getTypeFieldInfo(selectedType);
+        const fieldOrder = typeInfo?.fieldOrder ?? null;
+        const entries: [string, unknown][] = [[typeService.getTypeFieldName(), selectedType]];
+        for (const [name, value] of typeInfo?.fieldDefaults ?? []) {
+            if (name !== settings.fields.title && name !== typeService.getTypeFieldName()) entries.push([name, value]);
         }
 
         // Add title — formatYamlValue (called below) handles all quoting

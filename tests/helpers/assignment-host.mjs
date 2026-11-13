@@ -5,8 +5,11 @@ import { fileURLToPath, URL } from "node:url";
 import { build } from "esbuild";
 
 const require = createRequire(import.meta.url);
-const source = (await build({
-    entryPoints: [fileURLToPath(new URL("../../src/main.ts", import.meta.url))],
+const bundleSource = (await build({
+    stdin: {
+        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal";',
+        resolveDir: fileURLToPath(new URL("../../", import.meta.url)),
+    },
     bundle: true, packages: "external", platform: "node", format: "cjs", write: false,
 })).outputFiles[0].text;
 const clone = value => globalThis.structuredClone(value);
@@ -48,8 +51,14 @@ export async function assignmentHost({
     collision,
     failure,
     beforeUpdate,
+    source = "metadata-menu",
+    providerSettings = {},
+    providerApi,
+    cachedTags = [],
+    bookmarks = [],
+    afterRename,
 } = {}) {
-    const notices = [], errors = [], writes = [], renames = [], folders = [], saves = [], modals = [];
+    const notices = [], errors = [], writes = [], renames = [], folders = [], saves = [], modals = [], created = [], opened = [];
     let saved = { typesPath: "types", typeAssignment: { targetType: "project", ...options }, ...settings };
     let current = clone(frontmatter);
     const body = "# Body\n\nKeep this text and [[link]].\n";
@@ -59,29 +68,34 @@ export async function assignmentHost({
         get extension() { return this.name.split(".").at(-1); }
         get basename() { return this.name.slice(0, -this.extension.length - 1); }
     }
-    class TFolder { constructor(folderPath) { this.path = folderPath; } }
+    class TFolder { constructor(folderPath) { this.path = folderPath; this.children = []; } }
     const file = new TFile(path);
     const typeFiles = Object.keys(schemas).map(name => new TFile(`types/${name}.md`));
     const existing = new Map([["types", new TFolder("types")], ["inbox", new TFolder("inbox")]]);
     for (const type of typeFiles) existing.set(type.path, type);
     if (collision) existing.set(collision, new TFile(collision));
+    const rootFolder = new TFolder("");
+    rootFolder.children.push(file);
+    existing.get("inbox").children.push(file);
     const app = {
-        workspace: { getActiveFile: () => active ? file : null, on: () => ({}) },
+        workspace: { getActiveFile: () => active ? file : null, on: () => ({}), getLeaf: () => ({ openFile: async target => opened.push(target.path) }) },
         vault: {
             getAbstractFileByPath: name => name === file.path ? file : existing.get(name) ?? null,
             getMarkdownFiles: () => [...typeFiles, file],
+            getRoot: () => rootFolder,
             async read(target) {
                 assert.equal(target, file);
                 if (failure === "read") throw new Error("Read failed");
                 return rawContent ?? `---\n${JSON.stringify(current, null, 2)}\n---\n${body}`;
             },
+            async create(path, content) { const target = new TFile(path); created.push({ path, content }); existing.set(path, target); return target; },
             async createFolder(name) {
                 if (failure === "folder") throw new Error("Folder creation failed");
                 folders.push(name);
                 existing.set(name, new TFolder(name));
             },
         },
-        metadataCache: { getFileCache: target => ({ frontmatter: target === file ? cachedFrontmatter : schemas[target.basename] }) },
+        metadataCache: { getFileCache: target => target !== file && schemas[target.path.slice("types/".length, -3)] === null ? null : ({ frontmatter: target === file ? cachedFrontmatter : schemas[target.path.slice("types/".length, -3)], tags: target === file ? cachedTags.map(tag => ({ tag })) : [] }) },
         fileManager: {
             async processFrontMatter(target, callback) {
                 assert.equal(target, file);
@@ -98,9 +112,13 @@ export async function assignmentHost({
                 assert.equal(existing.has(destination), false);
                 renames.push(destination);
                 file.path = destination;
+                afterRename?.(file, schemas);
             },
         },
-        plugins: { plugins: { "metadata-menu": { settings: { presetFields: [{ name: "global", type: "Multi" }] } } } },
+        internalPlugins: { plugins: { bookmarks: { instance: { getBookmarks: () => bookmarks } } } },
+        plugins: { plugins: source === "none" ? {} : {
+            [source]: { settings: { classFilesPath: "types/", fileClassAlias: "fileClass", presetFields: [{ name: "global", type: "Multi" }], ...providerSettings }, api: providerApi },
+        } },
     };
 
     class Element {
@@ -148,10 +166,10 @@ export async function assignmentHost({
         registerEvent() {}
     }
     const module = { exports: {} };
-    new Function("require", "module", "exports", "console", source)(
+    new Function("require", "module", "exports", "console", bundleSource)(
         name => name === "obsidian" ? {
             Plugin, Modal, Setting, TFile, TFolder,
-            SuggestModal: class {}, PluginSettingTab: class {},
+            SuggestModal: class { setPlaceholder() {} setInstructions() {} }, PluginSettingTab: class {},
             Notice: class { constructor(message) { notices.push(message); } },
             parseYaml, normalizePath: value => value.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/+|\/+$/g, ""),
             moment: () => ({ format: format => `formatted:${format}` }),
@@ -161,7 +179,7 @@ export async function assignmentHost({
     let plugin = new module.exports.default();
     await plugin.onload();
     return {
-        file, app, notices, errors, writes, renames, folders, saves, modals, body,
+        file, app, notices, errors, writes, renames, folders, saves, modals, body, created, opened, classes: module.exports,
         get plugin() { return plugin; },
         get frontmatter() { return current; },
         get saved() { return saved; },

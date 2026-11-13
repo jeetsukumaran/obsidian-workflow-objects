@@ -52,8 +52,6 @@ const additions = {
     reviewed: false,
     flags: [],
     created: "formatted:YYYY",
-    priority: null,
-    tags: [],
 };
 
 // Run the actual plugin registrations, commands, and services. Only the host
@@ -80,7 +78,11 @@ async function fixture({
     const typeFiles = new Map(Object.keys(schemas).map(name => [`types/${name}.md`, new TFile(`types/${name}.md`)]));
     const app = {
         workspace: { getActiveFile: () => active ? file : null, on: () => ({}) },
-        vault: { getAbstractFileByPath: path => typeFiles.get(path) ?? null },
+        vault: {
+            getAbstractFileByPath: path => typeFiles.get(path) ?? null,
+            getMarkdownFiles: () => [...typeFiles.values()],
+            read: async () => `---\n${JSON.stringify(current)}\n---\nBody`,
+        },
         metadataCache: {
             getFileCache: target => ({
                 frontmatter: target === file
@@ -116,6 +118,7 @@ async function fixture({
     const obsidian = {
         Plugin,
         TFile,
+        parseYaml: text => JSON.parse(text),
         Modal: class {},
         SuggestModal: class {},
         PluginSettingTab: class {},
@@ -148,8 +151,8 @@ test("registers all four commands with the requested names", async () => {
 });
 
 const expectedOrders = [
-    ["author", "created", "extra", "fileClass", "flags", "priority", "rating", "reviewed", "status", "tags", "title", "zeta"],
-    ["status", "title", "rating", "author", "reviewed", "flags", "created", "priority", "tags", "extra", "fileClass", "zeta"],
+    ["author", "created", "extra", "fileClass", "flags", "rating", "reviewed", "status", "title", "zeta"],
+    ["status", "title", "rating", "author", "reviewed", "flags", "created", "extra", "fileClass", "zeta"],
     [...Object.keys(original), ...Object.keys(additions)],
     [...Object.keys(additions), ...Object.keys(original)],
 ];
@@ -161,7 +164,7 @@ for (const [index, [id, name]] of commands.entries()) {
         assert.deepEqual(Object.keys(env.frontmatter), expectedOrders[index]);
         assert.deepEqual(env.frontmatter, { ...original, ...additions });
         assert.equal(env.writes.length, 1, "addition and ordering share one atomic update");
-        assert.match(env.notices.at(-1), /Added 7 missing front matter field\(s\)/);
+        assert.match(env.notices.at(-1), /Added 5 missing front matter field\(s\)/);
 
         const firstResult = Object.entries(env.frontmatter);
         await env.run(id);
@@ -181,13 +184,12 @@ for (const [index, [id, name]] of commands.entries()) {
         if (index >= 2) assert.deepEqual(Object.keys(env.frontmatter), Object.keys(values));
     });
 
-    test(`${name}: supports notes without frontmatter using presets`, async () => {
+    test(`${name}: ignores presets on notes without a class`, async () => {
         const env = await fixture({ frontmatter: {}, presetFields: [
             { name: "zebra", type: "Input" }, { name: "alpha", type: "Checkbox" },
         ] });
         await env.run(id);
-        assert.deepEqual(env.frontmatter, { zebra: "", alpha: false });
-        assert.deepEqual(Object.keys(env.frontmatter), index === 0 ? ["alpha", "zebra"] : ["zebra", "alpha"]);
+        assert.deepEqual(env.frontmatter, {});
     });
 
     test(`${name}: sorts even without additions, while append/prepend keep order`, async () => {
@@ -215,17 +217,17 @@ test("resolves the current type inside the update when the note cache is stale",
     assert.deepEqual(Object.keys(env.frontmatter), expectedOrders[1]);
 });
 
-test("adds only presets when the type definition is unavailable", async () => {
+test("does not insert presets when the type definition is unavailable", async () => {
     const env = await fixture({ schemas: {} });
     await env.run(commands[1][0]);
-    assert.deepEqual(Object.keys(env.frontmatter), ["priority", "status", "tags", "extra", "fileClass", "title", "zeta"]);
-    assert.deepEqual(env.frontmatter, { ...original, priority: null, tags: [] });
+    assert.deepEqual(Object.keys(env.frontmatter), ["extra", "fileClass", "status", "title", "zeta"]);
+    assert.deepEqual(env.frontmatter, original);
 });
 
-test("type fields take precedence over presets with the same name", async () => {
+test("only schema declarations provide fields, even when presets contain the same name", async () => {
     const env = await fixture({ frontmatter: { fileClass: "article" } });
     await env.run(commands[2][0]);
-    assert.equal(env.frontmatter.status, null, "Select from the schema overrides the Input preset");
+    assert.equal(env.frontmatter.status, null, "Select comes from the schema; presets are ignored");
 });
 
 test("uses configured type aliases and updated settings", async () => {
@@ -253,13 +255,13 @@ test("uses Metadata Menu's configured type alias", async () => {
 });
 
 test("treats prototype property names as ordinary frontmatter keys", async () => {
-    const env = await fixture({ frontmatter: JSON.parse('{"__proto__":{"keep":true}}'), presetFields: [
+    const env = await fixture({ frontmatter: JSON.parse('{"fileClass":"special","__proto__":{"keep":true}}'), schemas: { special: { fields: [
         { name: "__proto__", type: "Input" },
         { name: "constructor", type: "Input" },
         { name: "toString", type: "Input" },
-    ] });
+    ] } } });
     await env.run(commands[3][0]);
-    assert.deepEqual(Object.keys(env.frontmatter), ["constructor", "toString", "__proto__"]);
+    assert.deepEqual(Object.keys(env.frontmatter), ["constructor", "toString", "fileClass", "__proto__"]);
     assert.deepEqual(env.frontmatter.__proto__, { keep: true });
     assert.equal(env.frontmatter.constructor, "");
     assert.equal(env.frontmatter.toString, "");

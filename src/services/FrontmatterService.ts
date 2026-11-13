@@ -7,6 +7,7 @@ import {
     MissingFrontmatterMode,
     TypeAssignmentOptions,
     TypeFieldInfo,
+    SchemaResolution,
     DEFAULT_CLEANUP_OPTIONS,
 } from "../types";
 import { TypeService } from "./TypeService";
@@ -19,6 +20,7 @@ export interface PreparedTypeAssignment {
     frontmatter: Record<string, unknown>;
     added: number;
     removed: number;
+    schemaSignature?: string;
 }
 
 /**
@@ -41,69 +43,66 @@ export class FrontmatterService {
         file: TFile,
         mode: MissingFrontmatterMode
     ): Promise<number> {
-        let added = 0;
-
-        await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-            // Resolve from the current document inside the atomic update;
-            // the metadata cache may still describe an earlier type.
-            const rawType = fm[this.typeService.getTypeFieldName()];
-            const typeValue = typeof rawType === "string" ? rawType : undefined;
-            const { typeInfo } = this.typeService.resolveTypeInfo(typeValue);
-            const fieldOrder = (typeValue
-                ? this.typeService.getFieldSortOrder(typeValue)
-                : null) ?? typeInfo?.fieldOrder ?? null;
-
-            added = this.insertFields(fm, typeInfo?.fieldDefaults ?? new Map(), fieldOrder, mode);
-        });
-
+        const original = await this.readFrontmatter(file);
+        const schemaSignature = this.typeService.schemaSignature(file);
+        const resolution = await this.typeService.resolveNoteSchema(file, original);
+        const frontmatter = { ...original };
+        const added = this.insertFields(frontmatter, resolution.typeInfo?.fieldDefaults ?? new Map(),
+            resolution.typeInfo?.fieldOrder ?? null, mode);
+        await this.applyTypeAssignment(file, { sourcePath: file.path, original, frontmatter, added, removed: 0, schemaSignature });
         return added;
     }
 
-    /** Read current metadata and calculate the assignment without writing it. */
-    async prepareTypeAssignment(file: TFile, options: TypeAssignmentOptions): Promise<PreparedTypeAssignment> {
-        const typeInfo = this.typeService.getTypeFieldInfo(options.targetType);
-        if (!typeInfo) {
-            throw new Error(`No field schema available for type "${options.targetType}"`);
-        }
-        const sourcePath = file.path;
+    /** Parse current disk content; the metadata cache can lag behind a previous write. */
+    async readFrontmatter(file: TFile): Promise<Record<string, unknown>> {
         const content = await this.app.vault.read(file);
-        // Delimiter parsing also works on the minimum supported Obsidian version.
         const opening = /^\uFEFF?---[ \t]*\r?\n/.exec(content);
-        let original: Record<string, unknown> = {};
-        if (opening) {
-            const rest = content.slice(opening[0].length);
-            const closing = /^(?:---|\.\.\.)[ \t]*\r?$/m.exec(rest);
-            if (!closing) throw new Error("Front matter has no closing delimiter");
-            const parsed: unknown = parseYaml(rest.slice(0, closing.index));
-            if (parsed != null) {
-                if (typeof parsed !== "object" || Array.isArray(parsed)) {
-                    throw new Error("Front matter must contain named fields");
-                }
-                original = parsed as Record<string, unknown>;
-            }
-        }
+        if (!opening) return {};
+        const rest = content.slice(opening[0].length);
+        const closing = /^(?:---|\.\.\.)[ \t]*\r?$/m.exec(rest);
+        if (!closing) throw new Error("Front matter has no closing delimiter");
+        const parsed: unknown = parseYaml(rest.slice(0, closing.index));
+        if (parsed == null) return {};
+        if (typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Front matter must contain named fields");
+        return parsed as Record<string, unknown>;
+    }
 
+    /** Plan against the selected type and the final location, retaining contextual classes. */
+    async prepareTypeAssignment(
+        file: TFile,
+        options: TypeAssignmentOptions,
+        destination = file.path,
+        original?: Record<string, unknown>
+    ): Promise<PreparedTypeAssignment> {
+        original ??= await this.readFrontmatter(file);
+        const schemaSignature = this.typeService.schemaSignature(file);
         const typeField = this.typeService.getTypeFieldName();
+        const resolution = await this.typeService.resolveNoteSchema(file, { ...original, [typeField]: options.targetType }, destination);
+        if (!resolution.schemaComplete || !resolution.typeInfo) {
+            throw new Error(resolution.issues.join("; ") || `No field schema available for type "${options.targetType}"`);
+        }
+        const { typeInfo, protectedFields } = resolution;
         let removed = 0;
         const retained = Object.entries(original).filter(([key, value]) => {
-            const remove = key !== typeField && !typeInfo.definedFields.has(key) &&
+            const remove = !protectedFields.has(key) && !typeInfo.definedFields.has(key) &&
                 (options.removeFields === "all" || (options.removeFields === "empty" && isEmptyValue(value)));
             if (remove) removed++;
             return !remove;
         }).map(([key, value]): [string, unknown] => [key, key === typeField ? options.targetType : value]);
         const frontmatter: Record<string, unknown> = Object.fromEntries(retained);
         const defaults = options.addMissingFields ? new Map(typeInfo.fieldDefaults) : new Map<string, unknown>();
-        // The assignment always sets the discriminator, even when adding fields is disabled.
         defaults.set(typeField, options.targetType);
-        const fieldOrder = this.typeService.getFieldSortOrder(options.targetType) ?? typeInfo.fieldOrder;
         const mode = options.sortMode === "none" ? options.newFieldsPosition : options.sortMode;
-        const added = this.insertFields(frontmatter, defaults, fieldOrder, mode);
-        return { sourcePath, original, frontmatter, added, removed };
+        const added = this.insertFields(frontmatter, defaults, typeInfo.fieldOrder, mode);
+        return { sourcePath: file.path, original, frontmatter, added, removed, schemaSignature };
     }
 
     /** Apply a prepared assignment only if its metadata and source path still match. */
     async applyTypeAssignment(file: TFile, prepared: PreparedTypeAssignment): Promise<void> {
         await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            if (prepared.schemaSignature && prepared.schemaSignature !== this.typeService.schemaSignature(file)) {
+                throw new Error("The schema or class bindings changed while preparing the edit. Run the command again.");
+            }
             if (file.path !== prepared.sourcePath || JSON.stringify(fm) !== JSON.stringify(prepared.original)) {
                 throw new Error("The note changed while preparing the assignment. Run the command again.");
             }
@@ -140,165 +139,60 @@ export class FrontmatterService {
         }
     }
 
-    /**
-     * Sort frontmatter fields according to type definition order or alphabetically
-     * @param file The file to sort
-     * @param mode Sort mode: 'schema' for type definition order, 'alphabetical' for alphabetical, or 'default' to use settings
-     */
-    async sortFrontmatter(
-        file: TFile,
-        mode: "schema" | "alphabetical" | "default" = "default"
-    ): Promise<void> {
-        const frontmatter =
-            this.app.metadataCache.getFileCache(file)?.frontmatter || {};
-        const typeValue = frontmatter[this.typeService.getTypeFieldName()] as string;
-
-        // Determine effective mode
-        const effectiveMode: SortMode =
-            mode === "default" ? this.settings.defaultFieldSort : mode;
-
-        const fieldOrder = typeValue
-            ? this.typeService.getFieldSortOrder(typeValue)
-            : (this.typeService.getPresetFieldInfo()?.fieldOrder ?? null);
-
-        await this.app.fileManager.processFrontMatter(file, (fm) => {
-            if (!fm) return;
-
-            const entries: [string, unknown][] = Object.entries(fm);
-            const sorted = sortEntries(entries, fieldOrder, effectiveMode);
-
-            // Rebuild in order
-            for (const k of Object.keys(fm)) delete fm[k];
-            for (const [k, v] of sorted) fm[k] = v;
-
-            const orderSource =
-                effectiveMode === "schema" && fieldOrder
-                    ? "schema order"
-                    : "alphabetical";
-            new Notice(`Sorted ${sorted.length} field(s) (${orderSource})`);
+    /** Sort without removing empty properties or adding defaults. */
+    async sortFrontmatter(file: TFile, mode: "schema" | "alphabetical" | "default" = "default"): Promise<void> {
+        const sortMode: SortMode = mode === "default" ? this.settings.defaultFieldSort : mode;
+        await this.cleanFrontmatter(file, {
+            preserveDefinedFields: true, removeUndefinedFields: false, removeEmptyUndefinedFields: false,
+            addMissingFields: false, sortMode,
         });
+        new Notice(`Sorted front matter (${sortMode})`);
     }
 
-    /**
-     * Analyze what changes clean operation would make
-     */
+    /** The same removal policy drives preview and execution. Unknown schemas never authorize deletion. */
     analyzeCleanup(
-        fm: Record<string, unknown>,
-        typeInfo: TypeFieldInfo | null,
-        options: CleanupOptions,
-        schemaComplete: boolean = true
+        fm: Record<string, unknown>, typeInfo: TypeFieldInfo | null, options: CleanupOptions,
+        schemaComplete = true, protectedFields = new Set([this.typeService.getTypeFieldName()])
     ): CleanupAnalysis {
         const toRemove: CleanupAnalysis["toRemove"] = [];
-        const toAdd: string[] = [];
-
-        for (const key of Object.keys(fm)) {
-            if (key === this.typeService.getTypeFieldName()) continue;
-
-            const value = fm[key];
+        for (const [key, value] of Object.entries(fm)) {
+            if (protectedFields.has(key)) continue;
             const isEmpty = isEmptyValue(value);
-            const isDefined = typeInfo?.definedFields.has(key) ?? false;
-
-            let shouldRemove = false;
-
-            if (isDefined) {
-                // Schema field: only remove if empty AND not preserving
-                if (isEmpty && !options.preserveDefinedFields) {
-                    shouldRemove = true;
-                }
-            } else {
-                // Non-schema field: remove if empty OR if removeUndefinedFields
-                // (removeUndefinedFields only applies when schema is fully known)
-                if (isEmpty || (options.removeUndefinedFields && typeInfo && schemaComplete)) {
-                    shouldRemove = true;
-                }
-            }
-
-            if (shouldRemove) {
-                toRemove.push({ key, value, isEmpty });
-            }
+            const defined = typeInfo?.definedFields.has(key) ?? false;
+            const remove = defined ? isEmpty && !options.preserveDefinedFields
+                : schemaComplete && ((isEmpty && options.removeEmptyUndefinedFields !== false) ||
+                    (options.removeUndefinedFields && typeInfo !== null));
+            if (remove) toRemove.push({ key, value, isEmpty });
         }
-
-        if (options.addMissingFields && typeInfo) {
-            for (const fieldName of typeInfo.fieldDefaults.keys()) {
-                if (!(fieldName in fm)) {
-                    toAdd.push(fieldName);
-                }
-            }
-        }
-
+        const toAdd = options.addMissingFields && typeInfo
+            ? [...typeInfo.fieldDefaults.keys()].filter(key => !Object.prototype.hasOwnProperty.call(fm, key)) : [];
         return { toRemove, toAdd };
     }
 
-    /**
-     * Clean frontmatter according to type definition and options
-     */
-    async cleanFrontmatter(
-        file: TFile,
-        options: CleanupOptions = DEFAULT_CLEANUP_OPTIONS
-    ): Promise<CleanupStats> {
-        const frontmatter =
-            this.app.metadataCache.getFileCache(file)?.frontmatter || {};
-        const typeValue = frontmatter[this.typeService.getTypeFieldName()] as string;
+    async prepareCleanup(file: TFile, options: CleanupOptions): Promise<{
+        prepared: PreparedTypeAssignment; analysis: CleanupAnalysis; stats: CleanupStats; resolution: SchemaResolution;
+    }> {
+        const original = await this.readFrontmatter(file);
+        const schemaSignature = this.typeService.schemaSignature(file);
+        const resolution = await this.typeService.resolveNoteSchema(file, original);
+        const { typeInfo, schemaComplete, protectedFields } = resolution;
+        const analysis = this.analyzeCleanup(original, typeInfo, options, schemaComplete, protectedFields);
+        const removed = new Set(analysis.toRemove.map(entry => entry.key));
+        const frontmatter = Object.fromEntries(Object.entries(original).filter(([key]) => !removed.has(key)));
+        const added = this.insertFields(frontmatter, options.addMissingFields ? typeInfo?.fieldDefaults ?? new Map() : new Map(),
+            typeInfo?.fieldOrder ?? null, options.sortMode === "none" ? "append" : options.sortMode);
+        const stats: CleanupStats = {
+            removed: [...removed], added: Object.keys(frontmatter).filter(key => !Object.prototype.hasOwnProperty.call(original, key)),
+            preserved: Object.keys(original).filter(key => !removed.has(key) && isEmptyValue(original[key]) && typeInfo?.definedFields.has(key)),
+        };
+        return { prepared: { sourcePath: file.path, original, frontmatter, added, removed: removed.size, schemaSignature }, analysis, stats, resolution };
+    }
 
-        const { typeInfo, schemaComplete } = this.typeService.resolveTypeInfo(typeValue || undefined);
-
-        const stats: CleanupStats = { removed: [], added: [], preserved: [] };
-
-        await this.app.fileManager.processFrontMatter(file, (fm) => {
-            if (!fm) return;
-
-            // Phase 1: Remove fields
-            for (const key of Object.keys(fm)) {
-                if (key === this.typeService.getTypeFieldName()) continue;
-
-                const isEmpty = isEmptyValue(fm[key]);
-                const isDefined = typeInfo?.definedFields.has(key) ?? false;
-
-                let shouldRemove = false;
-
-                if (isDefined) {
-                    if (isEmpty && !options.preserveDefinedFields) {
-                        shouldRemove = true;
-                    }
-                } else {
-                    if (isEmpty || (options.removeUndefinedFields && typeInfo && schemaComplete)) {
-                        shouldRemove = true;
-                    }
-                }
-
-                if (shouldRemove) {
-                    stats.removed.push(key);
-                    delete fm[key];
-                } else if (isEmpty && isDefined) {
-                    stats.preserved.push(key);
-                }
-            }
-
-            // Phase 2: Add missing fields
-            if (options.addMissingFields && typeInfo) {
-                for (const [fieldName, defaultValue] of typeInfo.fieldDefaults) {
-                    if (!(fieldName in fm)) {
-                        fm[fieldName] = defaultValue;
-                        stats.added.push(fieldName);
-                    }
-                }
-            }
-
-            // Phase 3: Sort
-            if (options.sortMode !== "none") {
-                const fieldOrder = typeValue
-                    ? this.typeService.getFieldSortOrder(typeValue)
-                    : null;
-
-                const entries: [string, unknown][] = Object.entries(fm);
-                const sorted = sortEntries(entries, fieldOrder, options.sortMode);
-
-                for (const k of Object.keys(fm)) delete fm[k];
-                for (const [k, v] of sorted) fm[k] = v;
-            }
-        });
-
-        return stats;
+    async cleanFrontmatter(file: TFile, options: CleanupOptions = DEFAULT_CLEANUP_OPTIONS): Promise<CleanupStats> {
+        const plan = await this.prepareCleanup(file, options);
+        await this.applyTypeAssignment(file, plan.prepared);
+        if (!plan.resolution.schemaComplete) new Notice(`Unknown fields preserved: ${plan.resolution.issues.join("; ")}`);
+        return plan.stats;
     }
 
     /**

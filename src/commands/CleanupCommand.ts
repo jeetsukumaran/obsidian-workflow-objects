@@ -63,10 +63,7 @@ export async function cleanFrontmatterInteractive(
     const result = getActiveFileWithMeta(app);
     if (!result) return;
 
-    const { file, frontmatter } = result;
-    const typeValue = frontmatter[typeService.getTypeFieldName()] as string;
-
-    const { typeInfo, schemaComplete } = typeService.resolveTypeInfo(typeValue || undefined);
+    const { file } = result;
 
     // Build menu options
     const menuOptions = [
@@ -95,6 +92,7 @@ export async function cleanFrontmatterInteractive(
                 preserveDefinedFields: true,
                 removeUndefinedFields: false,
                 addMissingFields: false,
+                removeEmptyUndefinedFields: false,
                 sortMode: "alphabetical",
             };
             break;
@@ -104,6 +102,7 @@ export async function cleanFrontmatterInteractive(
                 preserveDefinedFields: true,
                 removeUndefinedFields: false,
                 addMissingFields: false,
+                removeEmptyUndefinedFields: false,
                 sortMode: "schema",
             };
             break;
@@ -159,7 +158,8 @@ export async function cleanFrontmatterInteractive(
     }
 
     // Analyze and confirm if deleting non-empty fields
-    const analysis = frontmatterService.analyzeCleanup(frontmatter, typeInfo, options, schemaComplete);
+    const plan = await frontmatterService.prepareCleanup(file, options);
+    const { analysis } = plan;
     const nonEmptyDeletions = analysis.toRemove.filter((item) => !item.isEmpty);
 
     if (nonEmptyDeletions.length > 0) {
@@ -178,8 +178,9 @@ export async function cleanFrontmatterInteractive(
         if (!confirm) return;
     }
 
-    const stats = await frontmatterService.cleanFrontmatter(file, options);
-    showCleanupStats(stats, options.sortMode);
+    await frontmatterService.applyTypeAssignment(file, plan.prepared);
+    if (!plan.resolution.schemaComplete) new Notice(`Unknown fields preserved: ${plan.resolution.issues.join("; ")}`);
+    showCleanupStats(plan.stats, options.sortMode);
 }
 
 /**
@@ -194,13 +195,7 @@ export async function cleanFrontmatterStandard(
     const result = getActiveFileWithMeta(app);
     if (!result) return;
 
-    const { file, frontmatter } = result;
-    const typeValue = frontmatter[typeService.getTypeFieldName()] as string;
-
-    if (typeValue && !typeService.typeExists(typeValue)) {
-        new Notice(`Type "${typeValue}" not found`);
-        return;
-    }
+    const { file } = result;
 
     const options: CleanupOptions = {
         ...DEFAULT_CLEANUP_OPTIONS,
@@ -223,13 +218,7 @@ export async function cleanFrontmatterStrict(
     const result = getActiveFileWithMeta(app);
     if (!result) return;
 
-    const { file, frontmatter } = result;
-    const typeValue = frontmatter[typeService.getTypeFieldName()] as string;
-
-    if (typeValue && !typeService.typeExists(typeValue)) {
-        new Notice(`Type "${typeValue}" not found`);
-        return;
-    }
+    const { file } = result;
 
     const options: CleanupOptions = {
         preserveDefinedFields: true,

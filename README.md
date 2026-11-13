@@ -2,7 +2,7 @@
 
 An Obsidian plugin for "typed object" note workflows.
 
-This plugin serves to implement the metadata schemas associated with notes of particular file classes, as defined and managed using [Metadata Menu](https://github.com/mdelobelle/metadatamenu), to curate typed-note file names, locations, and frontmatter.
+Workflow Objects uses fileClass schemas to create and curate typed notes, including their filenames, locations, and frontmatter. It supports [Fileclass](https://github.com/mdelobelle/fileclass), [Metadata Menu](https://github.com/mdelobelle/metadatamenu), and standalone schema files.
 
 ---
 
@@ -19,23 +19,54 @@ A note of type `article` carries fields like `author`, `status`, and `rating`; a
 
 ---
 
-## Relationship to Metadata Menu
+## Schema integrations
 
-Workflow Objects is designed as a **companion to [Metadata Menu](https://github.com/mdelobelle/metadatamenu)**. The two plugins divide responsibilities cleanly:
+**Schema source** selects Automatic, Fileclass, Metadata Menu, or Standalone.
+Automatic prefers an enabled Fileclass plugin, then Metadata Menu, then standalone
+schema files. Explicit selection never silently switches to another integration.
+Neither external plugin is required in standalone mode.
 
-| | Metadata Menu | Workflow Objects |
-|---|---|---|
-| **Role** | Schema manager | Note and frontmatter curator |
-| **Defines** | What each type of object *is* — its fields, their types, their defaults | Where objects *live*, how they are *named*, how their frontmatter is *kept consistent* |
-| **Manages** | Editing field values in-note via menus and forms | Creating, filing, sorting, cleaning, navigating, and cataloguing typed notes |
+Workflow Objects reads the selected integration's class folder and type-field
+alias. **Types path** and **Type field** override those values. Standalone mode
+uses the configured folder (or **Fallback types path**) and defaults to `fileClass`.
+Class names include subfolders: `Classes/work/project.md` defines `work/project`.
+Fileclass's public schema API supplies resolved fields when available and when
+its folder matches the configured folder; otherwise Workflow Objects reads the
+schema files directly.
 
-Metadata Menu defines what an `article` object is — that is, a note with a metadata-defined schema of the `article` type: which fields it has, what types they are, what their defaults should be. Workflow Objects *implements* that definition across the vault: it creates new `article` objects (notes conforming to the `article` type schema) pre-populated with those fields, files them in the right folder with the right filename, keeps their frontmatter tidy as the schema evolves, lets you navigate sequentially between `article` objects, and generates an Obsidian Bases `.base` file that serves as a live catalog of every `article` object in the vault.
+The schema resolver includes inherited root fields, `excludes`, and both
+Fileclass name-based and Metadata Menu ID-based `fieldsOrder` lists. Nested
+children remain inside their parent objects; insertion never promotes them into
+separate top-level properties. Fileclass insertion uses empty defaults (`{}` for
+objects, `[]` for lists, and an empty string for scalar fields). Standalone and
+Metadata Menu retain Workflow Objects' scalar defaults, including current dates,
+false booleans, and null numbers.
 
-Together, the two plugins transform a vault of loosely structured notes into a vault of typed objects — Metadata Menu as the schema manager, Workflow Objects as the curator that implements those schemas in practice.
+For existing notes, metadata operations combine explicit classes with tag,
+folder, and bookmark bindings. Fileclass's global class applies as a baseline;
+Metadata Menu's global class applies when no other class supplies fields. The type
+property and frontmatter tags that bind classes are protected from cleanup.
+Navigation and opening by type recognize these bindings. Reshelving uses the
+first explicit type, otherwise the first contextual type, then the global type.
 
-If Metadata Menu is installed, Workflow Objects auto-detects its type-field alias (`fileClass` by default) and reads type definitions directly from the Metadata Menu fileClass folder — no duplicate configuration needed. It can also operate without Metadata Menu, reading type definitions from any folder of notes you designate.
+**Preset fields are not supported.** Workflow Objects neither reads nor inserts
+Metadata Menu presets. Existing preset values remain ordinary note properties:
+normal insertion preserves them, and cleanup follows the selected removal
+policy. To retain shared fields as schema members, declare them in a class,
+parent class, or applicable global class. This update does not edit another
+plugin's settings or migrate any notes automatically.
 
----
+A missing parent, malformed schema, inheritance cycle, stale Fileclass index,
+or unavailable selected integration prevents schema-based deletion. Cleanup
+preserves unknown fields, including empty ones, and reports the problem;
+reassignment stops before writing. Metadata Menu's Dataview query bindings cannot
+be evaluated for a proposed note state, so configured query bindings also prevent
+removal and reassignment. Presets and Dataview inline fields are outside this
+plugin's schema support.
+
+Use one external schema manager at a time. Fileclass's author advises against
+enabling Fileclass and Metadata Menu together; if both are enabled, automatic
+selection consistently chooses Fileclass.
 
 ## Installation
 
@@ -67,7 +98,7 @@ fields:
 ---
 ```
 
-If Metadata Menu is installed, this folder is read automatically from its settings. Otherwise, set **Types path** in the plugin settings.
+The selected integration supplies this folder unless **Types path** overrides it. Standalone mode reads the same file format without an external plugin.
 
 ---
 
@@ -126,7 +157,7 @@ Reorders frontmatter fields A–Z, regardless of schema.
 ### Insert, append, or prepend missing front matter
 
 These four commands add absent fields to the active note using the type schema's
-defaults and Metadata Menu preset fields. Existing values are preserved,
+defaults. Existing values are preserved,
 including empty strings, nulls, false, zero, lists, and fields outside the schema.
 A field is missing only when its key is absent.
 
@@ -138,18 +169,17 @@ A field is missing only when its key is absent.
 | Prepend missing front matter | Adds missing fields before the existing fields, preserving existing field order. |
 
 Append and prepend arrange the newly added fields in schema order. Schema order
-uses `fieldsOrder` when available, otherwise the schema's field-definition order,
-followed by preset fields. These commands do not use the default sort setting.
+accepts field names or legacy field IDs in `fieldsOrder`, including inherited root fields. These commands do not use the default sort setting.
 
-Notes without a type use Metadata Menu presets. If the type definition is
-unavailable, only preset fields can be added. Without any schema or presets,
-there are no fields to add, and schema sorting falls back to alphabetical order.
+Notes without an explicit type can use contextual or global classes. Without an
+applicable schema there are no fields to add, and schema sorting falls back to
+alphabetical order. Presets never supply fields.
 The two insert commands still sort when no fields are missing; append and prepend
 leave the field order unchanged in that case.
 
 ### Clean frontmatter (interactive)
 
-Opens a menu of cleanup actions for the active typed note (object). Each action is a preset combination of three independent operations: adding fields missing from the schema, removing fields not present in the schema, and sorting the result.
+Opens a menu of cleanup actions for the active typed note (object). Each action is a predefined combination of three independent operations: adding fields missing from the schema, removing fields not present in the schema, and sorting the result.
 
 | Action | Adds missing fields | Removes undefined fields | Sort |
 |---|:---:|:---:|---|
@@ -167,7 +197,7 @@ When an *enforce* action would delete fields that currently have values, the plu
 
 ### Clean frontmatter (standard)
 
-Non-interactive *ensure*: adds any fields missing from the type schema and preserves all existing fields — including those not in the schema — using the default sort from settings. Safe to run on any typed note (object).
+Non-interactive *ensure*: adds missing schema fields, preserves declared fields and non-empty extra fields, removes empty extra fields when the schema is complete, and uses the default sort from settings.
 
 ---
 
@@ -254,7 +284,7 @@ Assigns the active note to a selected object type using the configured type fiel
 | Update file location | Enable or disable automatic location changes. | Enabled |
 | Auto-rename | Apply filename rules using the current title and the new type. | Enabled |
 | Auto-reshelve | Apply the new type's folder rules. | Enabled |
-| Add missing fields | Add absent fields using schema and preset defaults. | Enabled |
+| Add missing fields | Add absent fields using the complete applicable schema. | Enabled |
 | Remove fields outside the new schema | Only if empty; even if not empty; never (preserve all fields). | Only if empty |
 | Sort fields | Following schema; alphabetically; do not sort. | Following schema |
 | New fields, when not sorting | Prepended or appended; retain existing field order. | Appended |
@@ -265,9 +295,9 @@ and folder rules can still use the note's current title, dates, and other values
 even if the metadata removal policy removes those fields.
 
 The type field is always set to the selected type. Adding missing fields leaves
-existing values intact, including empty values. Metadata Menu presets count as
-part of the schema. "Even if not empty" deletes fields outside that schema even
-when they contain values. "Never: preserve all fields" retains all existing
+existing values intact, including empty values. Inherited fields and fields from
+remaining contextual classes count as part of the schema. "Even if not empty"
+deletes fields outside that schema even when they contain values. "Never: preserve all fields" retains all existing
 fields while updating the type field. Schema or alphabetical sorting reorders
 the complete frontmatter; unsorted insertion arranges only new fields in schema
 order at the selected end.
@@ -278,10 +308,19 @@ restored after restarting Obsidian. Canceling discards dialog edits. If the
 remembered type is no longer available, the dialog selects the current type
 when available, otherwise the first available type.
 
-The command checks the destination before updating metadata. An existing file
-at that path stops the assignment. If moving the file fails after metadata was
-updated, the notice identifies that partial result so the operation can be
-retried.
+Assignment replaces the explicit type selection, including an existing list, with
+the selected type. Tag and bookmark bindings remain applicable, and global classes
+follow the selected integration's rules. Folder bindings are evaluated at the destination; disabling location changes retains
+the current folder's bindings. Tags that bind classes are preserved even when
+not declared as schema fields. Neither tags nor external binding rules are
+silently rewritten to force a note into only one class.
+
+The command checks the destination before updating metadata. A collision stops
+the assignment. The move must succeed before metadata removal begins. If the
+metadata write fails or the note/schema changes during preparation, the command
+attempts to restore the original location and reports any restoration failure.
+Single-note and bulk assignment use this same operation. Cleanup's interactive
+preview applies only to the exact metadata snapshot the user reviewed.
 
 ### Bulk assign object type
 
@@ -345,14 +384,15 @@ Closes all open tabs except one and collapses the file explorer. A quick reset t
 
 | Setting | Description | Default |
 |---|---|---|
-| **Types path** | Vault path to the folder of type-definition notes. Each note defines one object type (one class of typed notes). Leave empty to auto-read from Metadata Menu. | *(auto)* |
-| **Fallback types path** | Path used when Metadata Menu is absent and no Types path is set. | `system/schema/content-types` |
+| **Schema source** | Automatic (Fileclass, then Metadata Menu, then standalone), or select a source explicitly. | Automatic |
+| **Types path** | Vault path to the folder of type-definition notes. Each note defines one object type (one class of typed notes). Leave empty to read from the selected integration. | *(auto)* |
+| **Fallback types path** | Standalone schema folder when no Types path is set. | `system/schema/content-types` |
 
 ### Field names
 
 | Setting | Description | Default |
 |---|---|---|
-| **Type field** | Frontmatter field that records a note's object type. Auto-detected from Metadata Menu (`fileClass`) when left empty. | *(auto)* |
+| **Type field** | Frontmatter field that records a note's object type. Read from the selected integration; standalone defaults to `fileClass`. | *(auto)* |
 | **Title field** | Frontmatter field used as the human-readable title of an object. Referenced as `{{ title }}` in path and filename templates. | `title` |
 
 ### Behaviour
@@ -421,4 +461,4 @@ The default maps every type to `{{ date }}--{{ title }}`.
 
 ## Acknowledgements
 
-Workflow Objects relies on [Metadata Menu](https://github.com/mdelobelle/metadatamenu) by mdelobelle for type schema definitions, and uses [LiquidJS](https://liquidjs.com) for path and filename templating.
+Workflow Objects supports the fileClass schema format maintained by mdelobelle in [Fileclass](https://github.com/mdelobelle/fileclass) and [Metadata Menu](https://github.com/mdelobelle/metadatamenu), and uses [LiquidJS](https://liquidjs.com) for path and filename templating.

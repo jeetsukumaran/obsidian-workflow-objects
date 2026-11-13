@@ -1,9 +1,5 @@
 import { App, Notice } from "obsidian";
-import {
-    WorkflowObjectsSettings,
-    CleanupOptions,
-    DEFAULT_CLEANUP_OPTIONS,
-} from "../types";
+import { WorkflowObjectsSettings, TypeAssignmentOptions } from "../types";
 import { TypeService } from "../services/TypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
 import { BulkAssignTypeModal } from "../modals/BulkAssignTypeModal";
@@ -11,38 +7,10 @@ import {
     BulkAssignPreviewModal,
     FilePreviewEntry,
 } from "../modals/BulkAssignPreviewModal";
-import { collectFiles, reshelveFile } from "./VaultCurationCommand";
+import { TypeAssignmentService } from "../services/TypeAssignmentService";
+import { collectFiles } from "./VaultCurationCommand";
 
-/**
- * "Bulk assign object type" command.
- *
- * Flow:
- *  1. Load available type names — abort if none found.
- *  2. Show {@link BulkAssignTypeModal}: user picks the target type, scopes the
- *     file set with a directory + optional include/exclude regexes, and opts
- *     into post-assign clean / sort operations.
- *  3. Collect matching `.md` / `.qmd` files using the shared `collectFiles`
- *     helper from VaultCurationCommand.
- *  4. Show {@link BulkAssignPreviewModal}: user sees every matched file (with
- *     its current type, if any) and can deselect individual entries before
- *     committing.
- *  5. For each confirmed file:
- *     a. Write the target type into the type field via `processFrontMatter`.
- *     b. Optionally clean frontmatter (standard or strict) against the new
- *        type's schema, folding any requested sort into the same pass to
- *        avoid redundant file writes.
- *     c. If sort was requested but clean was not, run a sort-only clean pass
- *        (preserveDefinedFields=true, no add/remove) so that the sort
- *        operates against the freshly assigned schema without firing
- *        individual per-file sort Notices.
- *     d. Optionally reshelve: delegate to `reshelveFile` passing `freshFm`
- *        (the pre-write cache snapshot merged with the new type) so that the
- *        path computation uses the correct type without depending on the
- *        metadata cache, which may not have propagated the processFrontMatter
- *        writes yet (Obsidian updates the cache asynchronously via file-watcher
- *        events, not synchronously on the processFrontMatter await).
- *  6. Display a summary Notice.
- */
+/** Preview a scoped set of notes, then apply the same assignment policy as the single-note command. */
 export async function bulkAssignType(
     app: App,
     settings: WorkflowObjectsSettings,
@@ -108,83 +76,24 @@ export async function bulkAssignType(
 
     const totals = { assigned: 0, cleaned: 0, sorted: 0, reshelved: 0, errors: 0 };
 
-    // Build the CleanupOptions once — sort is folded in so we avoid a second
-    // processFrontMatter call when both clean and sort are requested.
-    const effectiveSortMode = opts.runSort ? opts.sortMode : "none";
-
-    const cleanOptions: CleanupOptions | null = opts.runClean
-        ? opts.cleanMode === "strict"
-            ? {
-                  preserveDefinedFields: true,
-                  removeUndefinedFields: true,
-                  addMissingFields: true,
-                  sortMode: effectiveSortMode,
-              }
-            : {
-                  ...DEFAULT_CLEANUP_OPTIONS,
-                  sortMode: effectiveSortMode,
-              }
-        : null;
-
-    // Sort-only options: used when clean is disabled but sort is requested.
-    const sortOnlyOptions: CleanupOptions = {
-        preserveDefinedFields: true,
-        removeUndefinedFields: false,
-        addMissingFields: false,
-        sortMode: opts.sortMode,
+    const options: TypeAssignmentOptions = {
+        targetType: opts.targetType,
+        updateFileLocation: opts.runReshelve,
+        autoRename: true,
+        autoReshelve: true,
+        addMissingFields: opts.runClean,
+        removeFields: opts.runClean ? opts.cleanMode === "strict" ? "all" : "empty" : "never",
+        sortMode: opts.runSort ? opts.sortMode : "none",
+        newFieldsPosition: "append",
     };
-
+    const assignment = new TypeAssignmentService(app, settings, typeService, frontmatterService);
     for (const file of previewResult.selectedFiles) {
         try {
-            // Snapshot the cached frontmatter BEFORE we write anything, then
-            // merge in the new type.  This gives reshelveFile a complete,
-            // cache-independent frontmatter record that is guaranteed to
-            // reflect the new type — avoiding the "destination already exists"
-            // error that arises when processFrontMatter returns before
-            // Obsidian's metadata cache has propagated the file change.
-            const cachedFm =
-                app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-            const freshFm: Record<string, unknown> = {
-                ...cachedFm,
-                [typeField]: opts.targetType,
-            };
-            // Assign type field
-            await app.fileManager.processFrontMatter(
-                file,
-                (fm: Record<string, unknown>) => {
-                    fm[typeField] = opts.targetType;
-                }
-            );
+            const result = await assignment.assign(file, options);
             totals.assigned++;
-            if (cleanOptions) {
-                // Clean (with sort folded in if requested)
-                await frontmatterService.cleanFrontmatter(file, cleanOptions);
-                totals.cleaned++;
-                if (opts.runSort) totals.sorted++;
-            } else if (opts.runSort) {
-                // Sort only — use cleanFrontmatter with a no-op clean config
-                // so we operate against the freshly assigned schema without
-                // firing individual per-file Notices.
-                await frontmatterService.cleanFrontmatter(
-                    file,
-                    sortOnlyOptions
-                );
-                totals.sorted++;
-            }
-
-            if (opts.runReshelve) {
-                // Pass freshFm so reshelveFile uses the correct (new) type
-                // without depending on the metadata cache, which may not yet
-                // reflect our processFrontMatter writes above.
-                const moved = await reshelveFile(
-                    file,
-                    app,
-                    settings,
-                    typeService,
-                    freshFm
-                );
-                if (moved) totals.reshelved++;
-            }
+            if (opts.runClean) totals.cleaned++;
+            if (opts.runSort) totals.sorted++;
+            if (result.moved) totals.reshelved++;
         } catch (err) {
             console.error(`[bulk-assign-type] Error on ${file.path}:`, err);
             totals.errors++;

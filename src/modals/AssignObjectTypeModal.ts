@@ -56,11 +56,11 @@ export class AssignObjectTypeModal extends Modal {
         new Setting(contentEl).setName("Metadata").setHeading();
         new Setting(contentEl)
             .setName("Add missing fields")
-            .setDesc("Add defaults from the new schema and presets. Preserve values in fields already present.")
+            .setDesc("Add defaults from the complete new schema. Preserve values in fields already present.")
             .addToggle(toggle => toggle.setValue(this.options.addMissingFields).onChange(value => { this.options.addMissingFields = value; }));
         new Setting(contentEl)
             .setName("Remove fields outside the new schema")
-            .setDesc("The type field is always retained. Removing non-empty fields deletes values outside the new schema and presets.")
+            .setDesc("Keep fields required by inherited and contextual classes. The type field and tags that bind classes are retained.")
             .addDropdown(dropdown => dropdown
                 .addOption("empty", "Only if empty")
                 .addOption("all", "Even if not empty")

@@ -507,15 +507,8 @@ export async function createWorkflowObjectCatalog(
 
         const { fullPath, replace } = resolved;
 
-        // 6. Gather schema fields in definition order
-        const fields = typeService.getTypeFieldDefinitions(opts.selectedType) ?? [];
-        // Respect fieldsOrder if present (same logic TypeService uses internally)
-        const orderedNames = typeService.getFieldSortOrder(opts.selectedType);
-        const orderedFields: FieldDefinition[] = orderedNames
-            ? orderedNames
-                .map((name) => fields.find((f) => f.name === name))
-                .filter((f): f is FieldDefinition => f != null)
-            : fields;
+        // Use the same inherited root fields and order as metadata operations.
+        const orderedFields = (await typeService.getTypeFieldInfo(opts.selectedType))?.fields ?? [];
 
         // 7. Generate .base content
         const typeFieldName = typeService.getTypeFieldName();

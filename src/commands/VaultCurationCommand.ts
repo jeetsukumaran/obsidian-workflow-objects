@@ -157,8 +157,10 @@ export async function reshelveFile(
 ): Promise<boolean> {
     const frontmatter =
         frontmatterOverride ??
-        (app.metadataCache.getFileCache(file)?.frontmatter ?? {});
-    const pathInfo = await computeExistingFilePath(file, settings, typeService.getTypeFieldName(), frontmatter);
+        await new FrontmatterService(app, settings, typeService).readFrontmatter(file);
+    const typeField = typeService.getTypeFieldName();
+    const context = { ...frontmatter, [typeField]: typeService.getPrimaryType(file, frontmatter) };
+    const pathInfo = await computeExistingFilePath(file, settings, typeField, context);
 
     if (file.path === pathInfo.fullPath) return false;
 

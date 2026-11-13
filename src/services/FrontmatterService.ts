@@ -4,6 +4,7 @@ import {
     CleanupOptions,
     CleanupAnalysis,
     CleanupStats,
+    MissingFrontmatterMode,
     TypeFieldInfo,
     DEFAULT_CLEANUP_OPTIONS,
 } from "../types";
@@ -19,6 +20,61 @@ export class FrontmatterService {
         private settings: WorkflowObjectsSettings,
         private typeService: TypeService
     ) {}
+
+    /**
+     * Add absent schema fields without removing fields or replacing values.
+     * Append/prepend preserve existing field order and insert new fields in
+     * schema order. The other modes sort the entire frontmatter, even when
+     * no fields are missing. Returns the number of fields added.
+     */
+    async insertMissingFrontmatter(
+        file: TFile,
+        mode: MissingFrontmatterMode
+    ): Promise<number> {
+        let added = 0;
+
+        await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            // Resolve from the current document inside the atomic update;
+            // the metadata cache may still describe an earlier type.
+            const rawType = fm[this.typeService.getTypeFieldName()];
+            const typeValue = typeof rawType === "string" ? rawType : undefined;
+            const { typeInfo } = this.typeService.resolveTypeInfo(typeValue);
+            const fieldOrder = (typeValue
+                ? this.typeService.getFieldSortOrder(typeValue)
+                : null) ?? typeInfo?.fieldOrder ?? null;
+
+            const missing = [...(typeInfo?.fieldDefaults ?? [])].filter(
+                ([key]) => !Object.prototype.hasOwnProperty.call(fm, key)
+            );
+            added = missing.length;
+
+            if (added === 0 && (mode === "append" || mode === "prepend")) return;
+
+            const existing = Object.entries(fm);
+            let entries: [string, unknown][];
+            if (mode === "append" || mode === "prepend") {
+                const orderedMissing = sortEntries(missing, fieldOrder, "schema");
+                entries = mode === "prepend"
+                    ? [...orderedMissing, ...existing]
+                    : [...existing, ...orderedMissing];
+            } else {
+                entries = sortEntries([...existing, ...missing], fieldOrder, mode);
+            }
+
+            for (const key of Object.keys(fm)) delete fm[key];
+            for (const [key, value] of entries) {
+                // Define own properties even for names such as "__proto__".
+                Object.defineProperty(fm, key, {
+                    value,
+                    enumerable: true,
+                    configurable: true,
+                    writable: true,
+                });
+            }
+        });
+
+        return added;
+    }
 
     /**
      * Sort frontmatter fields according to type definition order or alphabetically

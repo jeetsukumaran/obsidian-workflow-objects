@@ -76,6 +76,9 @@ export interface CleanupOptions {
     sortMode: "schema" | "alphabetical" | "none";
 }
 
+/** Placement of missing fields, or sort order for the entire frontmatter. */
+export type MissingFrontmatterMode = "alphabetical" | "schema" | "append" | "prepend";
+
 /**
  * Type field information extracted from Metadata Menu definitions
  */

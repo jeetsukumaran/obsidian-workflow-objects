@@ -11,6 +11,7 @@ import {
     sortFrontmatter,
     sortFrontmatterSchema,
     sortFrontmatterAlphabetical,
+    insertMissingFrontmatter,
     cleanFrontmatterInteractive,
     cleanFrontmatterStandard,
     cleanFrontmatterStrict,
@@ -106,6 +107,34 @@ export default class WorkflowObjectsPlugin extends Plugin {
             name: "Sort frontmatter (alphabetical)",
             callback: () =>
                 sortFrontmatterAlphabetical(this.app, this.settings, this.frontmatterService),
+        });
+
+        this.addCommand({
+            id: "insert-missing-frontmatter-alphabetical",
+            name: "Insert missing front matter (alphabetical)",
+            callback: () =>
+                insertMissingFrontmatter(this.app, this.frontmatterService, "alphabetical"),
+        });
+
+        this.addCommand({
+            id: "insert-missing-frontmatter-schema",
+            name: "Insert missing front matter (schema order)",
+            callback: () =>
+                insertMissingFrontmatter(this.app, this.frontmatterService, "schema"),
+        });
+
+        this.addCommand({
+            id: "append-missing-frontmatter",
+            name: "Append missing front matter",
+            callback: () =>
+                insertMissingFrontmatter(this.app, this.frontmatterService, "append"),
+        });
+
+        this.addCommand({
+            id: "prepend-missing-frontmatter",
+            name: "Prepend missing front matter",
+            callback: () =>
+                insertMissingFrontmatter(this.app, this.frontmatterService, "prepend"),
         });
 
         this.addCommand({

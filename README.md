@@ -123,6 +123,30 @@ Reorders frontmatter fields A–Z, regardless of schema.
 
 ---
 
+### Insert, append, or prepend missing front matter
+
+These four commands add absent fields to the active note using the type schema's
+defaults and Metadata Menu preset fields. Existing values are preserved,
+including empty strings, nulls, false, zero, lists, and fields outside the schema.
+A field is missing only when its key is absent.
+
+| Command (after the `Workflow Objects:` prefix) | Field order |
+|---|---|
+| Insert missing front matter (alphabetical) | Sorts the entire frontmatter A–Z, including existing fields. |
+| Insert missing front matter (schema order) | Sorts the entire frontmatter by schema order, then places other fields alphabetically at the end. |
+| Append missing front matter | Adds missing fields after the existing fields, preserving existing field order. |
+| Prepend missing front matter | Adds missing fields before the existing fields, preserving existing field order. |
+
+Append and prepend arrange the newly added fields in schema order. Schema order
+uses `fieldsOrder` when available, otherwise the schema's field-definition order,
+followed by preset fields. These commands do not use the default sort setting.
+
+Notes without a type use Metadata Menu presets. If the type definition is
+unavailable, only preset fields can be added. Without any schema or presets,
+there are no fields to add, and schema sorting falls back to alphabetical order.
+The two insert commands still sort when no fields are missing; append and prepend
+leave the field order unchanged in that case.
+
 ### Clean frontmatter (interactive)
 
 Opens a menu of cleanup actions for the active typed note (object). Each action is a preset combination of three independent operations: adding fields missing from the schema, removing fields not present in the schema, and sorting the result.

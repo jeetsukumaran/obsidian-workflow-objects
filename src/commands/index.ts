@@ -21,6 +21,8 @@ export {
 
 export { reshelveWorkflowObject } from "./ReshelveCommand";
 
+export { insertMissingFrontmatter } from "./InsertMissingFrontmatterCommand";
+
 export { curateVault, reshelveFile } from "./VaultCurationCommand";
 
 export { cleanWorkspace } from "./WorkspaceCommand";

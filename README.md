@@ -244,6 +244,45 @@ A notice confirms how many fields were added and how many were overwritten.
 
 ---
 
+### Assign object to different type
+
+Assigns the active note to a selected object type using the configured type field
+(such as `fileClass`). The dialog provides these options:
+
+| Option | Choices | Default |
+|---|---|---|
+| Update file location | Enable or disable automatic location changes. | Enabled |
+| Auto-rename | Apply filename rules using the current title and the new type. | Enabled |
+| Auto-reshelve | Apply the new type's folder rules. | Enabled |
+| Add missing fields | Add absent fields using schema and preset defaults. | Enabled |
+| Remove fields outside the new schema | Only if empty; even if not empty; never (preserve all fields). | Only if empty |
+| Sort fields | Following schema; alphabetically; do not sort. | Following schema |
+| New fields, when not sorting | Prepended or appended; retain existing field order. | Appended |
+
+Rename and reshelve work independently. Turning off file-location changes keeps
+both the current filename and folder. The file extension is preserved. Filename
+and folder rules can still use the note's current title, dates, and other values
+even if the metadata removal policy removes those fields.
+
+The type field is always set to the selected type. Adding missing fields leaves
+existing values intact, including empty values. Metadata Menu presets count as
+part of the schema. "Even if not empty" deletes fields outside that schema even
+when they contain values. "Never: preserve all fields" retains all existing
+fields while updating the type field. Schema or alphabetical sorting reorders
+the complete frontmatter; unsorted insertion arranges only new fields in schema
+order at the selected end.
+
+Click **Assign type** to save every option, including the selected type, in
+`data.json` under `typeAssignment` and apply the assignment. These choices are
+restored after restarting Obsidian. Canceling discards dialog edits. If the
+remembered type is no longer available, the dialog selects the current type
+when available, otherwise the first available type.
+
+The command checks the destination before updating metadata. An existing file
+at that path stops the assignment. If moving the file fails after metadata was
+updated, the notice identifies that partial result so the operation can be
+retried.
+
 ### Bulk assign object type
 
 Assigns a chosen object type to a scoped set of notes in one operation, with a per-file preview and selection step before anything is written.

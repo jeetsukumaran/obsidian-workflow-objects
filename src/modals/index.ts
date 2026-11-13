@@ -1,5 +1,6 @@
 export { SuggesterModal, StringSuggesterModal } from "./SuggesterModal";
 export { InputModal } from "./InputModal";
+export { AssignObjectTypeModal } from "./AssignObjectTypeModal";
 export { ConfirmModal } from "./ConfirmModal";
 export { VaultCurationModal } from "./VaultCurationModal";
 export type { VaultCurationOptions } from "./VaultCurationModal";

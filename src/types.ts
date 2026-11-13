@@ -42,6 +42,20 @@ export interface WorkflowObjectsSettings {
     catalogCtimeField: CatalogTimestampField;
     /** Configuration for the auto-appended file.mtime column */
     catalogMtimeField: CatalogTimestampField;
+    /** Last submitted options for assigning an object to a different type. */
+    typeAssignment: TypeAssignmentOptions;
+}
+
+/** Options remembered by the object type assignment dialog. */
+export interface TypeAssignmentOptions {
+    targetType: string;
+    updateFileLocation: boolean;
+    autoRename: boolean;
+    autoReshelve: boolean;
+    addMissingFields: boolean;
+    removeFields: "empty" | "all" | "never";
+    sortMode: "schema" | "alphabetical" | "none";
+    newFieldsPosition: "prepend" | "append";
 }
 
 /**
@@ -168,6 +182,16 @@ export const DEFAULT_SETTINGS: WorkflowObjectsSettings = {
     catalogRemapDisplayNames: true,
     catalogCtimeField: { enabled: true, displayName: "Date file created" },
     catalogMtimeField: { enabled: true, displayName: "Date file modified" },
+    typeAssignment: {
+        targetType: "",
+        updateFileLocation: true,
+        autoRename: true,
+        autoReshelve: true,
+        addMissingFields: true,
+        removeFields: "empty",
+        sortMode: "schema",
+        newFieldsPosition: "append",
+    },
 };
 
 /**

@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, TFile } from "obsidian";
 import { Liquid } from "liquidjs";
 import { WorkflowObjectsSettings } from "../types";
 import { sanitizeFilename } from "./helpers";
@@ -37,6 +37,13 @@ export interface FilePathInfo {
     basename: string;
     /** Date prefix (YYYYMMDDTHHmm) */
     datePrefix: string;
+}
+
+/** Existing path components that should bypass the corresponding mapping rules. */
+interface FilePathOverrides {
+    folder?: string;
+    basename?: string;
+    extension?: string;
 }
 
 /**
@@ -172,31 +179,77 @@ export async function computeFilePath(
     title: string | null | undefined,
     existingDatePrefix?: string | null,
     ctime?: number,
-    frontmatter: Record<string, unknown> = {}
+    frontmatter: Record<string, unknown> = {},
+    overrides: FilePathOverrides = {}
 ): Promise<FilePathInfo> {
     // Preserve native JS types so that LiquidJS truthiness aligns with YAML
     // booleans (boolean false → falsy, nil → falsy, everything else → truthy).
     const ctx: TemplateContext = { ...frontmatter };
     if (title != null) ctx["title"] = title;
 
-    const folder = (await getDestinationFolder(typeValue, settings.pathMappings, ctx)) ?? "";
+    const folder = overrides.folder ?? (await getDestinationFolder(typeValue, settings.pathMappings, ctx)) ?? "";
 
     const datePrefix =
         existingDatePrefix ||
         (ctime ? generateDatePrefix(new Date(ctime)) : null) ||
         generateDatePrefix();
 
-    const filenamePattern = getFilenamePattern(typeValue, settings.filenameMappings);
-    const basename = await buildFilenameFromPattern(
-        filenamePattern,
+    const basename = overrides.basename ?? await buildFilenameFromPattern(
+        getFilenamePattern(typeValue, settings.filenameMappings),
         ctx,
         datePrefix,
         settings.maxTitleLength
     );
 
-    const fullPath = folder ? `${folder}/${basename}.md` : `${basename}.md`;
+    const filename = `${basename}.${overrides.extension ?? "md"}`;
+    const fullPath = folder ? `${folder}/${filename}` : filename;
 
     return { fullPath, folder, basename, datePrefix };
+}
+
+/** Compute an existing note's path, independently applying rename and folder rules. */
+export async function computeExistingFilePath(
+    file: TFile,
+    settings: WorkflowObjectsSettings,
+    typeField: string,
+    frontmatter: Record<string, unknown>,
+    autoRename: boolean = true,
+    autoReshelve: boolean = true
+): Promise<FilePathInfo> {
+    const frontmatterDate = resolveDateFromFrontmatter(frontmatter, settings.titlePrefixDateProperties);
+    return computeFilePath(
+        settings,
+        frontmatter[typeField] as string | undefined,
+        frontmatter[settings.fields.title] as string | undefined,
+        frontmatterDate !== null ? null : extractDatePrefix(file.basename),
+        frontmatterDate ?? file.stat.ctime,
+        frontmatter,
+        {
+            folder: autoReshelve ? undefined : file.path.slice(0, Math.max(0, file.path.lastIndexOf("/"))),
+            basename: autoRename ? undefined : file.basename,
+            extension: file.extension,
+        }
+    );
+}
+
+/** Resolve the first valid date using the configured property precedence. */
+function resolveDateFromFrontmatter(
+    frontmatter: Record<string, unknown>,
+    propertyNames: string[]
+): number | null {
+    for (const prop of propertyNames) {
+        const value = frontmatter[prop];
+        if (value instanceof Date) {
+            const timestamp = value.getTime();
+            if (!isNaN(timestamp)) return timestamp;
+        } else if (typeof value === "number" && !isNaN(value)) {
+            return value;
+        } else if (typeof value === "string" && value.trim()) {
+            const timestamp = Date.parse(value.trim());
+            if (!isNaN(timestamp)) return timestamp;
+        }
+    }
+    return null;
 }
 
 // ─── Folder creation ──────────────────────────────────────────────────────────

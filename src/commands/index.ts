@@ -34,3 +34,5 @@ export { cloneObjectType } from "./CloneObjectTypeCommand";
 export { copyFieldsFrom } from "./CopyFieldsFromCommand";
 
 export { bulkAssignType } from "./BulkAssignTypeCommand";
+
+export { assignObjectType } from "./AssignObjectTypeCommand";

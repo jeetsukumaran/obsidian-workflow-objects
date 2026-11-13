@@ -4,8 +4,7 @@ import { TypeService } from "../services/TypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
 import { VaultCurationModal, VaultCurationOptions } from "../modals/VaultCurationModal";
 import {
-    computeFilePath,
-    extractDatePrefix,
+    computeExistingFilePath,
     ensureFolderExists,
 } from "../utils/pathUtils";
 
@@ -159,19 +158,7 @@ export async function reshelveFile(
     const frontmatter =
         frontmatterOverride ??
         (app.metadataCache.getFileCache(file)?.frontmatter ?? {});
-    const typeField = typeService.getTypeFieldName();
-    const typeValue = frontmatter[typeField] as string | undefined;
-    const titleValue = frontmatter[settings.fields.title] as string | undefined;
-
-    const existingPrefix = extractDatePrefix(file.basename);
-    const frontmatterDate = resolveDateFromFrontmatter(
-        frontmatter,
-        settings.titlePrefixDateProperties
-    );
-
-    const pathInfo = await (frontmatterDate
-        ? computeFilePath(settings, typeValue, titleValue, null, frontmatterDate, frontmatter)
-        : computeFilePath(settings, typeValue, titleValue, existingPrefix, file.stat.ctime, frontmatter));
+    const pathInfo = await computeExistingFilePath(file, settings, typeService.getTypeFieldName(), frontmatter);
 
     if (file.path === pathInfo.fullPath) return false;
 
@@ -187,34 +174,6 @@ async function runReshelveOnFile(
     typeService: TypeService
 ): Promise<boolean> {
     return reshelveFile(file, app, settings, typeService);
-}
-
-/**
- * Resolve a date timestamp from frontmatter properties.
- * (Mirrors the logic in ReshelveCommand, kept here to avoid circular deps.)
- */
-function resolveDateFromFrontmatter(
-    frontmatter: Record<string, unknown>,
-    propertyNames: string[]
-): number | null {
-    for (const prop of propertyNames) {
-        const value = frontmatter[prop];
-        if (value == null) continue;
-
-        if (value instanceof Date) {
-            const ts = value.getTime();
-            if (!isNaN(ts)) return ts;
-            continue;
-        }
-
-        if (typeof value === "number" && !isNaN(value)) return value;
-
-        if (typeof value === "string" && value.trim()) {
-            const ts = Date.parse(value.trim());
-            if (!isNaN(ts)) return ts;
-        }
-    }
-    return null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ import {
     cloneObjectType,
     copyFieldsFrom,
     bulkAssignType,
+    assignObjectType,
 } from "./commands";
 
 export default class WorkflowObjectsPlugin extends Plugin {
@@ -173,6 +174,21 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 ),
         });
 
+        this.addCommand({
+            id: "assign-object-to-different-type",
+            name: "Assign object to different type",
+            callback: () => assignObjectType(
+                this.app,
+                this.settings,
+                this.typeService,
+                this.frontmatterService,
+                async options => {
+                    this.settings.typeAssignment = { ...options };
+                    await this.saveSettings();
+                }
+            ),
+        });
+
         // Storage commands
         this.addCommand({
             id: "reshelve-workflow-object",
@@ -267,6 +283,10 @@ export default class WorkflowObjectsPlugin extends Plugin {
     async loadSettings(): Promise<void> {
         const loaded = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+        this.settings.typeAssignment = {
+            ...DEFAULT_SETTINGS.typeAssignment,
+            ...loaded?.typeAssignment,
+        };
 
         // Ensure nested objects are properly merged
         if (loaded?.fields) {

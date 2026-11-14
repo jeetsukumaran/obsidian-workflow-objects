@@ -14,7 +14,7 @@ import { TypeService } from "./TypeService";
 import { isEmptyValue, sortEntries, SortMode } from "../utils/helpers";
 
 /** Prepared metadata edit, retained while the destination is checked. */
-export interface PreparedTypeAssignment {
+export interface PreparedFrontmatterEdit {
     sourcePath: string;
     original: Record<string, unknown>;
     frontmatter: Record<string, unknown>;
@@ -49,7 +49,7 @@ export class FrontmatterService {
         const frontmatter = { ...original };
         const added = this.insertFields(frontmatter, resolution.typeInfo?.fieldDefaults ?? new Map(),
             resolution.typeInfo?.fieldOrder ?? null, mode);
-        await this.applyTypeAssignment(file, { sourcePath: file.path, original, frontmatter, added, removed: 0, schemaSignature });
+        await this.applyPreparedEdit(file, { sourcePath: file.path, original, frontmatter, added, removed: 0, schemaSignature });
         return added;
     }
 
@@ -72,8 +72,9 @@ export class FrontmatterService {
         file: TFile,
         options: TypeAssignmentOptions,
         destination = file.path,
-        original?: Record<string, unknown>
-    ): Promise<PreparedTypeAssignment> {
+        original?: Record<string, unknown>,
+        suppliedTitle?: string
+    ): Promise<PreparedFrontmatterEdit> {
         original ??= await this.readFrontmatter(file);
         const schemaSignature = this.typeService.schemaSignature(file);
         const typeField = this.typeService.getTypeFieldName();
@@ -82,32 +83,47 @@ export class FrontmatterService {
             throw new Error(resolution.issues.join("; ") || `No field schema available for type "${options.targetType}"`);
         }
         const { typeInfo, protectedFields } = resolution;
+        const titleField = this.settings.fields.title;
+        // An explicitly entered title is part of this edit, even when the
+        // destination schema does not declare it.
+        if (suppliedTitle !== undefined) protectedFields.add(titleField);
         let removed = 0;
         const retained = Object.entries(original).filter(([key, value]) => {
             const remove = !protectedFields.has(key) && !typeInfo.definedFields.has(key) &&
                 (options.removeFields === "all" || (options.removeFields === "empty" && isEmptyValue(value)));
             if (remove) removed++;
             return !remove;
-        }).map(([key, value]): [string, unknown] => [key, key === typeField ? options.targetType : value]);
+        }).map(([key, value]): [string, unknown] => [key, key === typeField ? options.targetType
+            : key === titleField && suppliedTitle !== undefined ? suppliedTitle : value]);
         const frontmatter: Record<string, unknown> = Object.fromEntries(retained);
         const defaults = options.addMissingFields ? new Map(typeInfo.fieldDefaults) : new Map<string, unknown>();
+        if (suppliedTitle !== undefined) defaults.set(titleField, suppliedTitle);
         defaults.set(typeField, options.targetType);
         const mode = options.sortMode === "none" ? options.newFieldsPosition : options.sortMode;
         const added = this.insertFields(frontmatter, defaults, typeInfo.fieldOrder, mode);
         return { sourcePath: file.path, original, frontmatter, added, removed, schemaSignature };
     }
 
-    /** Apply a prepared assignment only if its metadata and source path still match. */
-    async applyTypeAssignment(file: TFile, prepared: PreparedTypeAssignment): Promise<void> {
+    /** Check a planned edit before moving the note or committing its metadata. */
+    async assertPreparedEditCurrent(file: TFile, prepared: PreparedFrontmatterEdit): Promise<void> {
+        this.validatePreparedEdit(file, await this.readFrontmatter(file), prepared);
+    }
+
+    /** Apply an edit only if its metadata, schema, and path still match. */
+    async applyPreparedEdit(file: TFile, prepared: PreparedFrontmatterEdit): Promise<void> {
         await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-            if (prepared.schemaSignature && prepared.schemaSignature !== this.typeService.schemaSignature(file)) {
-                throw new Error("The schema or class bindings changed while preparing the edit. Run the command again.");
-            }
-            if (file.path !== prepared.sourcePath || JSON.stringify(fm) !== JSON.stringify(prepared.original)) {
-                throw new Error("The note changed while preparing the assignment. Run the command again.");
-            }
+            this.validatePreparedEdit(file, fm, prepared);
             this.replaceFields(fm, Object.entries(prepared.frontmatter));
         });
+    }
+
+    private validatePreparedEdit(file: TFile, fm: Record<string, unknown>, prepared: PreparedFrontmatterEdit): void {
+        if (prepared.schemaSignature && prepared.schemaSignature !== this.typeService.schemaSignature(file)) {
+            throw new Error("The schema or class bindings changed while preparing the edit. Run the command again.");
+        }
+        if (file.path !== prepared.sourcePath || JSON.stringify(fm) !== JSON.stringify(prepared.original)) {
+            throw new Error("The note changed while preparing the edit. Run the command again.");
+        }
     }
 
     /** Insert defaults and arrange fields for both insertion and type assignment. */
@@ -170,7 +186,7 @@ export class FrontmatterService {
     }
 
     async prepareCleanup(file: TFile, options: CleanupOptions): Promise<{
-        prepared: PreparedTypeAssignment; analysis: CleanupAnalysis; stats: CleanupStats; resolution: SchemaResolution;
+        prepared: PreparedFrontmatterEdit; analysis: CleanupAnalysis; stats: CleanupStats; resolution: SchemaResolution;
     }> {
         const original = await this.readFrontmatter(file);
         const schemaSignature = this.typeService.schemaSignature(file);
@@ -190,7 +206,7 @@ export class FrontmatterService {
 
     async cleanFrontmatter(file: TFile, options: CleanupOptions = DEFAULT_CLEANUP_OPTIONS): Promise<CleanupStats> {
         const plan = await this.prepareCleanup(file, options);
-        await this.applyTypeAssignment(file, plan.prepared);
+        await this.applyPreparedEdit(file, plan.prepared);
         if (!plan.resolution.schemaComplete) new Notice(`Unknown fields preserved: ${plan.resolution.issues.join("; ")}`);
         return plan.stats;
     }

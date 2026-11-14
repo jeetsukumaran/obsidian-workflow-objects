@@ -178,7 +178,7 @@ export async function cleanFrontmatterInteractive(
         if (!confirm) return;
     }
 
-    await frontmatterService.applyTypeAssignment(file, plan.prepared);
+    await frontmatterService.applyPreparedEdit(file, plan.prepared);
     if (!plan.resolution.schemaComplete) new Notice(`Unknown fields preserved: ${plan.resolution.issues.join("; ")}`);
     showCleanupStats(plan.stats, options.sortMode);
 }

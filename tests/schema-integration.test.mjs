@@ -181,7 +181,7 @@ test("schema edits while a note moves invalidate removal and restore its origina
 });
 
 test("bulk reassignment shares destination schema handling and never cleans against the stale old type", async () => {
-    const env = await assignmentHost({ source: "fileclass", frontmatter: { fileClass: "old", oldValue: "remove", inherited: "keep", destinationValue: "keep" },
+    const env = await assignmentHost({ source: "fileclass", frontmatter: { fileClass: "old", title: "Keep", oldValue: "remove", inherited: "keep", destinationValue: "keep" },
         schemas: { old: schema("oldValue"), parent: schema("inherited"), project: { extends: "parent", fields: [] },
             destination: { ...schema("destinationValue"), filesPaths: ["content/project"] } },
     });
@@ -233,7 +233,7 @@ test("a rollback collision is reported without overwriting either note", async (
     await env.assign();
     assert.equal(env.frontmatter.fileClass, "old");
     assert.equal(env.renames.length, 1);
-    assert.match(env.notices.at(-1), /Metadata assignment failed; the file remains at content\/project/);
+    assert.match(env.notices.at(-1), /Metadata update failed; the file remains at content\/project/);
 });
 
 test("Metadata Menu's global class supplies fields for otherwise empty schemas", async () => {

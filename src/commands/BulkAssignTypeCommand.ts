@@ -7,7 +7,7 @@ import {
     BulkAssignPreviewModal,
     FilePreviewEntry,
 } from "../modals/BulkAssignPreviewModal";
-import { TypeAssignmentService } from "../services/TypeAssignmentService";
+import { ObjectUpdateService } from "../services/ObjectUpdateService";
 import { collectFiles } from "./VaultCurationCommand";
 
 /** Preview a scoped set of notes, then apply the same assignment policy as the single-note command. */
@@ -74,7 +74,7 @@ export async function bulkAssignType(
             `${previewResult.selectedFiles.length} file(s)…`
     );
 
-    const totals = { assigned: 0, cleaned: 0, sorted: 0, reshelved: 0, errors: 0 };
+    const totals = { assigned: 0, cleaned: 0, sorted: 0, reshelved: 0, skipped: 0, errors: 0 };
 
     const options: TypeAssignmentOptions = {
         targetType: opts.targetType,
@@ -86,10 +86,11 @@ export async function bulkAssignType(
         sortMode: opts.runSort ? opts.sortMode : "none",
         newFieldsPosition: "append",
     };
-    const assignment = new TypeAssignmentService(app, settings, typeService, frontmatterService);
+    const objects = new ObjectUpdateService(app, settings, typeService, frontmatterService);
     for (const file of previewResult.selectedFiles) {
         try {
-            const result = await assignment.assign(file, options);
+            const result = await objects.assignType(file, options);
+            if (!result) { totals.skipped++; continue; }
             totals.assigned++;
             if (opts.runClean) totals.cleaned++;
             if (opts.runSort) totals.sorted++;
@@ -110,6 +111,7 @@ function buildSummary(totals: {
     cleaned: number;
     sorted: number;
     reshelved: number;
+    skipped: number;
     errors: number;
 }): string {
     const parts: string[] = [
@@ -118,6 +120,7 @@ function buildSummary(totals: {
     if (totals.cleaned) parts.push(`cleaned ${totals.cleaned}`);
     if (totals.sorted && !totals.cleaned) parts.push(`sorted ${totals.sorted}`);
     if (totals.reshelved) parts.push(`reshelved ${totals.reshelved}`);
+    if (totals.skipped) parts.push(`skipped ${totals.skipped}`);
     if (totals.errors)
         parts.push(`${totals.errors} error(s) — see console`);
     return parts.join(" · ");

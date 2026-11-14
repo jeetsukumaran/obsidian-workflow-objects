@@ -193,7 +193,7 @@ export default class WorkflowObjectsPlugin extends Plugin {
         this.addCommand({
             id: "reshelve-workflow-object",
             name: "Reshelve workflow object",
-            callback: () => reshelveWorkflowObject(this.app, this.settings, this.typeService),
+            callback: () => reshelveWorkflowObject(this.app, this.settings, this.typeService, this.frontmatterService),
         });
 
         // Workspace commands

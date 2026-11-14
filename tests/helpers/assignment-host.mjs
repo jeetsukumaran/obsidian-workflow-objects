@@ -7,7 +7,7 @@ import { build } from "esbuild";
 const require = createRequire(import.meta.url);
 const bundleSource = (await build({
     stdin: {
-        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal";',
+        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal"; export { VaultCurationModal } from "./src/modals/VaultCurationModal";',
         resolveDir: fileURLToPath(new URL("../../", import.meta.url)),
     },
     bundle: true, packages: "external", platform: "node", format: "cjs", write: false,
@@ -138,6 +138,19 @@ export async function assignmentHost({
         change(value) { assert.ok(!this.row.disabled); this.value = value; this.callback(value); }
         click() { this.callback(); }
     }
+    class TextControl extends Control {
+        constructor(row) {
+            super(row);
+            this.listeners = new Map();
+            this.inputEl = {
+                value: "",
+                addEventListener: (event, callback) => this.listeners.set(event, callback),
+                focus() {}, select() {},
+            };
+        }
+        setPlaceholder(value) { this.placeholder = value; return this; }
+        setValue(value) { this.inputEl.value = value; return super.setValue(value); }
+    }
     class Setting {
         constructor(parent) { this.settingEl = new Element(); this.controls = []; parent.rows.push(this); }
         setName(name) { this.name = name; return this; }
@@ -148,6 +161,7 @@ export async function assignmentHost({
         addDropdown(callback) { return this.addControl(callback); }
         addToggle(callback) { return this.addControl(callback); }
         addButton(callback) { return this.addControl(callback); }
+        addText(callback) { const control = new TextControl(this); this.controls.push(control); callback(control); return this; }
     }
     class Modal {
         constructor() { this.contentEl = new Element(); }
@@ -166,7 +180,7 @@ export async function assignmentHost({
         registerEvent() {}
     }
     const module = { exports: {} };
-    new Function("require", "module", "exports", "console", bundleSource)(
+    new Function("require", "module", "exports", "console", "window", bundleSource)(
         name => name === "obsidian" ? {
             Plugin, Modal, Setting, TFile, TFolder,
             SuggestModal: class { setPlaceholder() {} setInstructions() {} }, PluginSettingTab: class {},
@@ -175,6 +189,7 @@ export async function assignmentHost({
             moment: () => ({ format: format => `formatted:${format}` }),
         } : require(name),
         module, module.exports, { ...console, error: (...args) => errors.push(args) },
+        { setTimeout: callback => callback() },
     );
     let plugin = new module.exports.default();
     await plugin.onload();

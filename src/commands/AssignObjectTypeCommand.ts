@@ -4,7 +4,7 @@ import { TypeService } from "../services/TypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
 import { AssignObjectTypeModal } from "../modals/AssignObjectTypeModal";
 import { getActiveFileWithMeta } from "../utils/helpers";
-import { TypeAssignmentService } from "../services/TypeAssignmentService";
+import { ObjectUpdateService } from "../services/ObjectUpdateService";
 
 /** Assign the active object to a chosen type, with remembered metadata and location options. */
 export async function assignObjectType(
@@ -33,7 +33,8 @@ export async function assignObjectType(
         await saveOptions(options);
 
         const { file } = active;
-        const prepared = await new TypeAssignmentService(app, settings, typeService, frontmatterService).assign(file, options);
+        const prepared = await new ObjectUpdateService(app, settings, typeService, frontmatterService).assignType(file, options);
+        if (!prepared) return;
         new Notice(`Assigned to "${options.targetType}": added ${prepared.added}, removed ${prepared.removed}. ${file.path}`);
     } catch (error) {
         console.error("Workflow Objects: Error assigning object type", error);

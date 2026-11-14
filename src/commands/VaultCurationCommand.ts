@@ -2,11 +2,8 @@ import { App, Notice, TFile, TFolder } from "obsidian";
 import { WorkflowObjectsSettings, CleanupOptions, DEFAULT_CLEANUP_OPTIONS } from "../types";
 import { TypeService } from "../services/TypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
+import { ObjectUpdateService } from "../services/ObjectUpdateService";
 import { VaultCurationModal, VaultCurationOptions } from "../modals/VaultCurationModal";
-import {
-    computeExistingFilePath,
-    ensureFolderExists,
-} from "../utils/pathUtils";
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
@@ -43,6 +40,7 @@ export async function curateVault(
     new Notice(`Starting curation on ${files.length} file(s)…`);
 
     const totals = { cleaned: 0, sorted: 0, reshelved: 0, errors: 0 };
+    const objects = new ObjectUpdateService(app, settings, typeService, frontmatterService);
 
     for (const file of files) {
         try {
@@ -55,8 +53,8 @@ export async function curateVault(
                 totals.sorted++;
             }
             if (opts.runReshelve) {
-                const moved = await runReshelveOnFile(file, app, settings, typeService);
-                if (moved) totals.reshelved++;
+                const result = await objects.reshelve(file);
+                if (result?.moved) totals.reshelved++;
             }
         } catch (err) {
             console.error(`[curate-vault] Error on ${file.path}:`, err);
@@ -136,46 +134,6 @@ async function runCleanOnFile(
               };
 
     await frontmatterService.cleanFrontmatter(file, cleanOptions);
-}
-
-// ─── Reshelve ─────────────────────────────────────────────────────────────────
-
-/**
- * Core reshelve logic, extracted so it can be called per-file without requiring
- * an active editor.  Returns true if the file was actually moved.
- *
- * @param frontmatterOverride  When provided, used instead of the metadata cache.
- *   Pass this when the cache may be stale (e.g. immediately after a
- *   processFrontMatter call whose cache update has not yet propagated).
- */
-export async function reshelveFile(
-    file: TFile,
-    app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
-    frontmatterOverride?: Record<string, unknown>
-): Promise<boolean> {
-    const frontmatter =
-        frontmatterOverride ??
-        await new FrontmatterService(app, settings, typeService).readFrontmatter(file);
-    const typeField = typeService.getTypeFieldName();
-    const context = { ...frontmatter, [typeField]: typeService.getPrimaryType(file, frontmatter) };
-    const pathInfo = await computeExistingFilePath(file, settings, typeField, context);
-
-    if (file.path === pathInfo.fullPath) return false;
-
-    await ensureFolderExists(app, pathInfo.folder);
-    await app.fileManager.renameFile(file, pathInfo.fullPath);
-    return true;
-}
-
-async function runReshelveOnFile(
-    file: TFile,
-    app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService
-): Promise<boolean> {
-    return reshelveFile(file, app, settings, typeService);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

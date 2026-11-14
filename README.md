@@ -132,6 +132,10 @@ Two-step picker: first choose a type, then choose a note from the list of all ob
 
 Moves and renames the active note to match its current frontmatter — applying your path and filename template settings to its type and title fields. Use this after changing a note's type or title, or after updating your path mapping rules, to bring the object into its correct location.
 
+If the configured title field is missing, null, or blank, reshelving prompts for a title, prefilled with the current filename without its extension. Accepting saves the title to that field and uses it in the path and filename templates. Cancelling or submitting an empty value skips reshelving that note. This also applies to the reshelve operation in **Curate vault**; any earlier clean or sort operations remain applied.
+
+Reshelving and type assignment share title prompting, path planning, collision checks, and move recovery. A failed move leaves metadata unchanged. If saving a prompted title fails after the move, the plugin attempts to restore the original location and reports any restoration failure.
+
 If the filename already encodes a date prefix (e.g. `20240315T0930--my-note.md`), that prefix is preserved unless the frontmatter contains a more authoritative date field (see *Date prefix source fields* in settings).
 
 ---
@@ -294,6 +298,16 @@ both the current filename and folder. The file extension is preserved. Filename
 and folder rules can still use the note's current title, dates, and other values
 even if the metadata removal policy removes those fields.
 
+When file-location changes and auto-rename are enabled, a missing, null, or blank
+title opens the same prompt as **Reshelve workflow object**, prefilled with the
+current filename without its extension. The entered title is saved with the
+assignment, even if the new schema does not declare the title field or adding
+missing fields is disabled. It follows the selected field-order policy.
+Cancelling this prompt skips the entire assignment for that note; submitted
+dialog options remain remembered. Bulk assignment uses the same prompt and
+continues with the remaining notes after a cancellation. Disabling auto-rename
+preserves the filename and does not request a title.
+
 The type field is always set to the selected type. Adding missing fields leaves
 existing values intact, including empty values. Inherited fields and fields from
 remaining contextual classes count as part of the schema. "Even if not empty"
@@ -319,7 +333,8 @@ The command checks the destination before updating metadata. A collision stops
 the assignment. The move must succeed before metadata removal begins. If the
 metadata write fails or the note/schema changes during preparation, the command
 attempts to restore the original location and reports any restoration failure.
-Single-note and bulk assignment use this same operation. Cleanup's interactive
+Single-note and bulk assignment, reshelving, and vault curation use
+`ObjectUpdateService` for title prompting and relocation. Cleanup's interactive
 preview applies only to the exact metadata snapshot the user reviewed.
 
 ### Bulk assign object type

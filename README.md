@@ -110,7 +110,39 @@ All commands are available from the Command Palette (`Ctrl/Cmd+P`).
 
 ### Create new workflow object
 
-Prompts for a type, then a title. Creates a new typed note — that is, a new object of the chosen type — pre-populated with all fields defined in that type's schema (with their default values). The note is filed at the path and given the filename determined by your **path mappings** and **filename mappings** settings.
+Select a type to open a form containing its fields, including inherited fields and
+nested objects. The configured title field is always available and must be filled
+in before creation.
+
+- **Text:** multiline editors, including the title. Free-text lists accept commas
+  or new lines and save as YAML lists.
+- **Dates and times:** native date, datetime, and time pickers, initially set to the
+  current local date/time. Field-specific formats take precedence over Fileclass's
+  per-type date defaults; otherwise values use ISO format. Date-link options are
+  respected.
+- **Numbers, booleans, and choices:** numeric inputs, toggles, and schema-defined
+  choice controls. Structured JSON/YAML values remain structured metadata;
+  objects and object lists with child definitions have nested forms.
+- **File and media links:** searchable pickers follow Fileclass's Base view order,
+  grouping, and display labels. Multi-file selections retain view order. Links
+  use the vault's link preferences and the new note's final directory, without
+  embedding media.
+
+The live destination uses your **path mappings** and **filename mappings**, with
+all entered metadata available to templates. Enable **Override directory** and/or
+**Override filename** to choose another destination. An empty directory override
+means the vault root; the filename accepts an optional `.md` extension.
+
+Click **Create object** to write and open the note. Selected editor text becomes
+its body. Cancel creates nothing. Validation errors, write failures, and filename
+collisions keep the form open with your entries intact.
+
+Fileclass Base filters using `this` require a saved note and cannot see this form's
+draft values. The picker explains this and offers **Show all files**. It also
+falls back to all Markdown/media files when Bases is unavailable or the query
+fails. Formula and lookup fields are displayed as calculated fields; their
+schema provider computes them after creation. Metadata Menu Dataview choice
+sources require a saved note, so the form allows manual value entry instead.
 
 ---
 

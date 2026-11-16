@@ -28,6 +28,15 @@ export class TypeService {
         return this.plugin(this.getSource())?.settings ?? {};
     }
 
+    /** FileClass has separate write formats; a blank default means native ISO. */
+    getDateFormat(field: FieldDefinition): string | undefined {
+        const own = !Array.isArray(field.options) ? field.options?.dateFormat : undefined;
+        if (typeof own === "string" && own.trim()) return own;
+        const key = { date: "defaultDateFormat", datetime: "defaultDateTimeFormat", time: "defaultTimeFormat" }[field.type.toLowerCase()];
+        const fallback = key ? this.providerSettings()[key] : undefined;
+        return typeof fallback === "string" && fallback.trim() ? fallback : undefined;
+    }
+
     /** Captured by edit plans so schema or binding changes cannot authorize stale removal. */
     schemaSignature(file: TFile): string {
         return JSON.stringify([
@@ -191,7 +200,7 @@ export class TypeService {
         for (const name of names) {
             const resolved = resolveDefinition(name, value => this.getTypeFrontmatter(value), source === "metadata-menu");
             issues.push(...resolved.issues);
-            let own = resolved.fields;
+            let own = [...resolved.fields, ...resolved.nestedFields];
             const plugin = this.plugin(source);
             const folder = plugin?.settings?.classFilesPath;
             // The public API supplies resolved order and inheritance. Explicit folder overrides
@@ -201,9 +210,10 @@ export class TypeService {
                 try {
                     const schema = await plugin.api.getSchema(name);
                     if (!schema || !Array.isArray(schema.fields)) throw new Error("Schema index is not ready");
-                    own = schema.fields.filter(field => !field.path);
+                    own = schema.fields;
+                    const roots = own.filter(field => !field.path);
                     const expected = new Set(resolved.fields.map(field => field.name));
-                    if (own.length !== expected.size || own.some(field => !expected.has(field.name))) {
+                    if (roots.length !== expected.size || roots.some(field => !expected.has(field.name))) {
                         throw new Error("Schema index is out of date");
                     }
                 } catch (error) {
@@ -211,20 +221,22 @@ export class TypeService {
                 }
             }
             for (const field of own) {
-                if (source === "metadata-menu" && fields.has(field.name)) continue;
-                if (source !== "metadata-menu") fields.delete(field.name);
-                fields.set(field.name, field);
+                const key = JSON.stringify([field.path ?? "", field.name]);
+                if (source === "metadata-menu" && fields.has(key)) continue;
+                if (source !== "metadata-menu") fields.delete(key);
+                fields.set(key, field);
             }
         }
         const global = this.providerSettings().globalFileClass;
-        if (source === "metadata-menu" && !isDefinition && !fields.size && typeof global === "string" && global && !names.includes(global)) {
+        const rootFields = [...fields.values()].filter(field => !field.path);
+        if (source === "metadata-menu" && !isDefinition && !rootFields.length && typeof global === "string" && global && !names.includes(global)) {
             return this.resolveNames([...names, global], true);
         }
-        const rootFields = [...fields.values()];
+        const nestedFields = [...fields.values()].filter(field => !!field.path);
         const defaults = new Map(rootFields.map(field => [field.name, this.defaultValue(field)]));
         return {
             typeNames: names,
-            typeInfo: names.length ? { definedFields: new Set(fields.keys()), fieldDefaults: defaults, fieldOrder: [...fields.keys()], fields: rootFields } : null,
+            typeInfo: names.length ? { definedFields: new Set(defaults.keys()), fieldDefaults: defaults, fieldOrder: [...defaults.keys()], fields: rootFields, nestedFields } : null,
             schemaComplete: issues.length === 0,
             issues,
             protectedFields: new Set([this.getTypeFieldName()]),
@@ -233,7 +245,7 @@ export class TypeService {
 
     private defaultValue(field: FieldDefinition): unknown {
         const type = field.type ? field.type[0].toUpperCase() + field.type.slice(1) : "Input";
-        if (this.getSource() !== "fileclass") return getDefaultValueForType(type, field.options ?? {}, this.settings.dateFormat);
+        if (this.getSource() !== "fileclass") return getDefaultValueForType(type, !Array.isArray(field.options) ? field.options ?? {} : {}, this.settings.dateFormat);
         if (["Object", "JSON", "YAML"].includes(type)) return {};
         if (["Multi", "MultiInput", "CycleDuration", "MultiFile", "MultiMedia", "ObjectList"].includes(type)) return [];
         return "";

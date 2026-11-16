@@ -109,6 +109,8 @@ export interface TypeFieldInfo {
     fieldOrder: string[];
     /** Root definitions in effective order, including inherited fields. */
     fields: FieldDefinition[];
+    /** Nested definitions retain their parent ID paths; never root properties. */
+    nestedFields: FieldDefinition[];
 }
 
 /** A complete schema is required before removing any unknown property. */
@@ -127,7 +129,7 @@ export interface FieldDefinition {
     id?: string;
     name: string;
     type: string;
-    options?: Record<string, unknown>;
+    options?: Record<string, unknown> | unknown[];
     /** Parent field IDs, separated by four underscores; absent/empty at root. */
     path?: string;
 }

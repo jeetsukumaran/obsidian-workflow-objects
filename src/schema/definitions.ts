@@ -10,6 +10,7 @@ export function stringList(value: unknown): string[] {
 
 export interface ResolvedDefinition {
     fields: FieldDefinition[];
+    nestedFields: FieldDefinition[];
     issues: string[];
 }
 
@@ -42,7 +43,7 @@ export function resolveDefinition(
                 if (!field || typeof field.name !== "string" || !field.name ||
                     (field.path !== undefined && typeof field.path !== "string")) {
                     issues.push(`Invalid field in type "${current}"`);
-                } else if (!field.path) {
+                } else {
                     fields.push({ ...field, type: typeof field.type === "string" ? field.type : "Input" });
                 }
             }
@@ -58,12 +59,18 @@ export function resolveDefinition(
     const merged = new Map<string, FieldDefinition>();
     for (const entry of metadataMenu ? chain : [...chain].reverse()) {
         for (const field of entry.fields) {
-            if (!entry.excluded.has(field.name) && (!metadataMenu || !merged.has(field.name))) {
-                merged.set(field.name, field);
+            const key = JSON.stringify([field.path ?? "", field.name]);
+            if (!entry.excluded.has(field.name) && (!metadataMenu || !merged.has(key))) {
+                merged.set(key, field);
             }
         }
     }
-    return { fields: orderFields([...merged.values()], order), issues };
+    const all = [...merged.values()];
+    return {
+        fields: orderFields(all.filter(field => !field.path), order),
+        nestedFields: all.filter(field => !!field.path),
+        issues,
+    };
 }
 
 /** Accept FileClass names and legacy Metadata Menu IDs; retain unnamed neighbours. */

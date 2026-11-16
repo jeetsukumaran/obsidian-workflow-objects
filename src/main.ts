@@ -61,13 +61,6 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 createNewWorkflowObject(this.app, this.settings, this.typeService),
         });
 
-        // this.addCommand({
-        //     id: "create-new-workflow-object-simple",
-        //     name: "Create new workflow object (simple)",
-        //     callback: () =>
-        //         createNewWorkflowObjectSimple(this.app, this.settings, this.typeService),
-        // });
-
         // Navigation commands
         this.addCommand({
             id: "navigate-next",

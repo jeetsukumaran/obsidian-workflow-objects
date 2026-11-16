@@ -281,12 +281,17 @@ test("new note creation uses inherited root fields and does not flatten nested c
         fields: [field("group", "Object"), field("child", "Input", { path: "groupId" })], fieldsOrder: ["group", "inherited"],
     } } });
     env.classes.StringSuggesterModal.prototype.openAndGetValue = async () => "project";
-    env.classes.InputModal.prototype.openAndGetValue = async () => "Created title";
+    env.classes.CreateWorkflowObjectModal.prototype.openAndCreate = async function () {
+        this.draft.fields.find(field => field.definition.name === "title").text = "Created title";
+        return this.draft.create();
+    };
     await env.plugin.commands.get("create-new-workflow-object").callback();
     assert.equal(env.created.length, 1);
-    assert.match(env.created[0].content, /group: \{\}/);
-    assert.match(env.created[0].content, /inherited: ""/);
-    assert.doesNotMatch(env.created[0].content, /^child:|^global:/m);
+    const fm = JSON.parse(env.created[0].content.split("---\n")[1]);
+    assert.deepEqual(fm.group, { child: "" });
+    assert.equal(fm.inherited, "");
+    assert.equal(Object.hasOwn(fm, "child"), false);
+    assert.equal(Object.hasOwn(fm, "global"), false);
 });
 
 test("binding resolution follows FileClass's literal prefixes and legacy scalar encodings", async () => {

@@ -348,3 +348,98 @@
     font-style: italic;
     white-space: nowrap;
 }
+/* Schema-driven creation form. */
+.wfo-create-modal {
+    width: min(720px, 94vw);
+}
+
+.wfo-create-modal .wfo-create-form {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+
+.wfo-create-modal .wfo-create-type,
+.wfo-create-modal .wfo-create-links {
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+.wfo-create-modal .wfo-create-field {
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.wfo-create-modal .wfo-create-field > .setting-item {
+    border-top: 0;
+}
+
+.wfo-create-modal .wfo-create-text-field {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.wfo-create-modal .wfo-create-text-field .setting-item-control,
+.wfo-create-modal .wfo-create-text-field textarea {
+    width: 100%;
+}
+
+.wfo-create-modal textarea {
+    resize: vertical;
+    min-height: 72px;
+}
+
+.wfo-create-modal input,
+.wfo-create-modal select {
+    max-width: 100%;
+}
+
+.wfo-create-modal .wfo-create-nested,
+.wfo-create-modal .wfo-create-choices {
+    border-left: 2px solid var(--background-modifier-border);
+    padding-left: 16px;
+    margin-bottom: 16px;
+}
+
+.wfo-create-modal .wfo-create-path {
+    padding: 12px;
+    background: var(--background-secondary);
+    border-radius: var(--radius-s);
+    overflow-wrap: anywhere;
+    font-family: var(--font-monospace);
+    font-size: var(--font-smaller);
+}
+
+.wfo-create-modal .wfo-create-error {
+    color: var(--text-error);
+    overflow-wrap: anywhere;
+}
+
+.wfo-create-modal .wfo-create-error:empty {
+    display: none;
+}
+
+.wfo-create-modal .wfo-create-file-list {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.wfo-create-modal .wfo-create-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--background-primary);
+    padding-bottom: 0;
+}
+
+@media (max-width: 600px) {
+    .wfo-create-modal .setting-item {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .wfo-create-modal .setting-item-control {
+        max-width: 100%;
+        flex-wrap: wrap;
+    }
+}

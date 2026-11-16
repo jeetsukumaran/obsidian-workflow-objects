@@ -1,6 +1,5 @@
 export {
     createNewWorkflowObject,
-    createNewWorkflowObjectSimple,
 } from "./CreateWorkflowObjectCommand";
 
 export {

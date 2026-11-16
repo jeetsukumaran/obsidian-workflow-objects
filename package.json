@@ -19,7 +19,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "liquidjs": "^10.24.0"
+    "liquidjs": "^10.24.0",
+    "obsidian-bases-adapter": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

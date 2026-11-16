@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const pluginSource = (await build({
     entryPoints: [fileURLToPath(new URL("../src/main.ts", import.meta.url))],
     bundle: true,
-    packages: "external",
+    external: ["obsidian", "liquidjs"],
     platform: "node",
     format: "cjs",
     write: false,

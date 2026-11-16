@@ -7,7 +7,7 @@ import { build } from "esbuild";
 const require = createRequire(import.meta.url);
 const bundleSource = (await build({
     stdin: {
-        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal"; export { VaultCurationModal } from "./src/modals/VaultCurationModal";',
+        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal"; export { VaultCurationModal } from "./src/modals/VaultCurationModal"; export { CreateWorkflowObjectModal } from "./src/modals/CreateWorkflowObjectModal";',
         resolveDir: fileURLToPath(new URL("../../", import.meta.url)),
     },
     bundle: true, packages: "external", platform: "node", format: "cjs", write: false,
@@ -57,6 +57,11 @@ export async function assignmentHost({
     cachedTags = [],
     bookmarks = [],
     afterRename,
+    selection = "",
+    extraFiles = {},
+    runtime = {},
+    basesAdapter = { isBasesAvailable: () => false },
+    generateLink = (target, sourcePath, _subpath, alias) => `[[${target.path.replace(/\.md$/, "")}${alias ? `|${alias}` : ""}]]`,
 } = {}) {
     const notices = [], errors = [], writes = [], renames = [], folders = [], saves = [], modals = [], created = [], opened = [];
     let saved = { typesPath: "types", typeAssignment: { targetType: "project", ...options }, ...settings };
@@ -73,22 +78,29 @@ export async function assignmentHost({
     const typeFiles = Object.keys(schemas).map(name => new TFile(`types/${name}.md`));
     const existing = new Map([["types", new TFolder("types")], ["inbox", new TFolder("inbox")]]);
     for (const type of typeFiles) existing.set(type.path, type);
+    for (const path of Object.keys(extraFiles)) existing.set(path, new TFile(path));
     if (collision) existing.set(collision, new TFile(collision));
     const rootFolder = new TFolder("");
     rootFolder.children.push(file);
     existing.get("inbox").children.push(file);
     const app = {
-        workspace: { getActiveFile: () => active ? file : null, on: () => ({}), getLeaf: () => ({ openFile: async target => opened.push(target.path) }) },
+        workspace: { activeEditor: { editor: { getSelection: () => selection } }, getActiveFile: () => active ? file : null, on: () => ({}), getLeaf: () => ({ openFile: async target => opened.push(target.path) }) },
         vault: {
             getAbstractFileByPath: name => name === file.path ? file : existing.get(name) ?? null,
             getMarkdownFiles: () => [...typeFiles, file],
+            getFiles: () => [...existing.values()].filter(item => item instanceof TFile).concat(file),
             getRoot: () => rootFolder,
             async read(target) {
+                if (target.path in extraFiles) return extraFiles[target.path];
                 assert.equal(target, file);
                 if (failure === "read") throw new Error("Read failed");
                 return rawContent ?? `---\n${JSON.stringify(current, null, 2)}\n---\n${body}`;
             },
-            async create(path, content) { const target = new TFile(path); created.push({ path, content }); existing.set(path, target); return target; },
+            async create(path, content) {
+                if (failure === "create") throw new Error("Create failed");
+                if (existing.has(path)) throw new Error("File exists");
+                const target = new TFile(path); created.push({ path, content }); existing.set(path, target); return target;
+            },
             async createFolder(name) {
                 if (failure === "folder") throw new Error("Folder creation failed");
                 folders.push(name);
@@ -97,6 +109,7 @@ export async function assignmentHost({
         },
         metadataCache: { getFileCache: target => target !== file && schemas[target.path.slice("types/".length, -3)] === null ? null : ({ frontmatter: target === file ? cachedFrontmatter : schemas[target.path.slice("types/".length, -3)], tags: target === file ? cachedTags.map(tag => ({ tag })) : [] }) },
         fileManager: {
+            generateMarkdownLink: generateLink,
             async processFrontMatter(target, callback) {
                 assert.equal(target, file);
                 if (failure === "write") throw new Error("Write failed");
@@ -124,19 +137,27 @@ export async function assignmentHost({
     class Element {
         constructor() { this.rows = []; this.children = []; this.visible = true; }
         empty() { this.rows = []; this.children = []; }
-        createEl(tag, props) { const child = { tag, ...props }; this.children.push(child); return child; }
+        createEl(tag, props = {}) { const child = Object.assign(new Element(), { tag, ...props }); this.children.push(child); return child; }
+        createDiv(props) { return this.createEl("div", props); }
+        addClass(value) { this.cls = [this.cls, value].filter(Boolean).join(" "); }
+        setText(value) { this.text = value; }
+        setAttribute(key, value) { this[key] = value; }
+        querySelector() { return null; }
+        querySelectorAll() { return []; }
+        scrollIntoView() {}
         toggle(value) { this.visible = value; }
     }
     class Control {
-        constructor(row) { this.row = row; this.options = new Map(); }
+        constructor(row) { this.row = row; this.options = new Map(); this.selectEl = new Element(); }
         setValue(value) { this.value = value; return this; }
         addOption(key, label) { this.options.set(key, label); return this; }
         setButtonText(value) { this.text = value; return this; }
         setCta() { return this; }
+        setDisabled(value) { this.disabled = value; return this; }
         onChange(callback) { this.callback = callback; return this; }
         onClick(callback) { this.callback = callback; return this; }
-        change(value) { assert.ok(!this.row.disabled); this.value = value; this.callback(value); }
-        click() { this.callback(); }
+        change(value) { assert.ok(!this.row.disabled && !this.disabled); this.setValue(value); return this.callback(value); }
+        click() { assert.ok(!this.disabled); return this.callback(); }
     }
     class TextControl extends Control {
         constructor(row) {
@@ -146,25 +167,29 @@ export async function assignmentHost({
                 value: "",
                 addEventListener: (event, callback) => this.listeners.set(event, callback),
                 focus() {}, select() {},
+                setAttribute(key, value) { this[key] = value; },
             };
         }
         setPlaceholder(value) { this.placeholder = value; return this; }
         setValue(value) { this.inputEl.value = value; return super.setValue(value); }
+        getValue() { return this.inputEl.value; }
     }
     class Setting {
         constructor(parent) { this.settingEl = new Element(); this.controls = []; parent.rows.push(this); }
         setName(name) { this.name = name; return this; }
         setDesc(description) { this.description = description; return this; }
         setHeading() { this.heading = true; return this; }
+        setClass(value) { this.settingEl.addClass(value); return this; }
         setDisabled(disabled) { this.disabled = disabled; return this; }
         addControl(callback) { const control = new Control(this); this.controls.push(control); callback(control); return this; }
         addDropdown(callback) { return this.addControl(callback); }
         addToggle(callback) { return this.addControl(callback); }
         addButton(callback) { return this.addControl(callback); }
         addText(callback) { const control = new TextControl(this); this.controls.push(control); callback(control); return this; }
+        addTextArea(callback) { return this.addText(control => { control.inputEl.tag = "textarea"; callback(control); }); }
     }
     class Modal {
-        constructor() { this.contentEl = new Element(); }
+        constructor() { this.app = app; this.contentEl = new Element(); this.modalEl = new Element(); }
         open() { modals.push(this); this.onOpen(); }
         close() { this.onClose(); }
     }
@@ -186,8 +211,10 @@ export async function assignmentHost({
             SuggestModal: class { setPlaceholder() {} setInstructions() {} }, PluginSettingTab: class {},
             Notice: class { constructor(message) { notices.push(message); } },
             parseYaml, normalizePath: value => value.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/+|\/+$/g, ""),
+            stringifyYaml: value => JSON.stringify(value, null, 2),
             moment: () => ({ format: format => `formatted:${format}` }),
-        } : require(name),
+            ...runtime,
+        } : name === "obsidian-bases-adapter" ? basesAdapter : require(name),
         module, module.exports, { ...console, error: (...args) => errors.push(args) },
         { setTimeout: callback => callback() },
     );

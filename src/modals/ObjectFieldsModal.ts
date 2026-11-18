@@ -63,7 +63,8 @@ export class ObjectFieldsModal<Result> extends Modal {
             const { definition, kind } = field;
             const options = fieldOptions(definition);
             const section = parent.createDiv({ cls: "wfo-create-field" });
-            const row = new Setting(section).setName(definition.name).setDesc(field.hint || definition.type);
+            const row = new Setting(section).setName(definition.name);
+            if (field.hint.trim()) row.setDesc(field.hint);
             const changed = (): void => { field.dirty = true; this.refreshPreview(); };
             if (field.raw) {
                 row.settingEl.addClass("wfo-create-text-field");

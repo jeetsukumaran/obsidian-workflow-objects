@@ -330,15 +330,33 @@ both the current filename and folder. The file extension is preserved. Filename
 and folder rules can still use the note's current title, dates, and other values
 even if the metadata removal policy removes those fields.
 
-When file-location changes and auto-rename are enabled, a missing, null, or blank
-title opens the same prompt as **Reshelve workflow object**, prefilled with the
-current filename without its extension. The entered title is saved with the
-assignment, even if the new schema does not declare the title field or adding
-missing fields is disabled. It follows the selected field-order policy.
-Cancelling this prompt skips the entire assignment for that note; submitted
-dialog options remain remembered. Bulk assignment uses the same prompt and
-continues with the remaining notes after a cancellation. Disabling auto-rename
-preserves the filename and does not request a title.
+Click **Review fields** to open the same schema-driven editor used when creating
+an object. It shows the new type's fields, inherited and contextual fields, and
+extra fields retained by your removal policy. Existing values are prefilled from
+the note's current contents. Only absent fields get defaults, including the
+current date/time for new date/time fields. When **Add missing fields** is off,
+new fields are displayed but are saved only if you edit them.
+
+Untouched values retain their original types and contents, including nulls,
+blanks, `false`, zero, lists, and nested data. Values incompatible with the new
+schema and unresolved links are shown in a JSON editor so they remain visible
+and editable. **Use schema input** explicitly replaces such a value with the new
+type's default and opens its typed control. Nested edits retain undeclared child
+properties. File pickers use the saved note as their Base query context; unsaved
+form edits are not visible to filters using `this`.
+
+When auto-rename is enabled, the editor includes the configured title field. A
+missing, null, or blank title is prefilled with the current filename without its
+extension. An edited title is saved even if the new schema does not declare it
+or automatic insertion is disabled. It follows the selected field-order policy.
+Bulk assignment continues to use the smaller title prompt and skips a note if
+that prompt is cancelled.
+
+The editor previews the destination and lists fields scheduled for removal.
+Edited metadata drives the filename and folder rules; fields required by a new
+destination appear in the editor. Click **Assign type** to apply the edit.
+Cancel or close the editor to leave the note unchanged. Validation errors and
+filename collisions keep the editor open with your entries intact.
 
 The type field is always set to the selected type. Adding missing fields leaves
 existing values intact, including empty values. Inherited fields and fields from
@@ -348,9 +366,10 @@ fields while updating the type field. Schema or alphabetical sorting reorders
 the complete frontmatter; unsorted insertion arranges only new fields in schema
 order at the selected end.
 
-Click **Assign type** to save every option, including the selected type, in
-`data.json` under `typeAssignment` and apply the assignment. These choices are
-restored after restarting Obsidian. Canceling discards dialog edits. If the
+Click **Review fields** to save every option, including the selected type, in
+`data.json` under `typeAssignment`. These choices are restored after restarting
+Obsidian, even if you subsequently cancel the field editor. Cancelling the options
+dialog discards its changes. If the
 remembered type is no longer available, the dialog selects the current type
 when available, otherwise the first available type.
 
@@ -365,8 +384,10 @@ The command checks the destination before updating metadata. A collision stops
 the assignment. The move must succeed before metadata removal begins. If the
 metadata write fails or the note/schema changes during preparation, the command
 attempts to restore the original location and reports any restoration failure.
-Single-note and bulk assignment, reshelving, and vault curation use
-`ObjectUpdateService` for title prompting and relocation. Cleanup's interactive
+Creation and single-note assignment share `ObjectFieldsModal`, `ObjectFieldService`,
+and `ObjectFilePickerModal`. Assignment, reshelving, and vault curation use
+`ObjectUpdateService` for planning and guarded relocation; metadata removal and
+ordering stay in `FrontmatterService`. Cleanup's interactive
 preview applies only to the exact metadata snapshot the user reviewed.
 
 ### Bulk assign object type

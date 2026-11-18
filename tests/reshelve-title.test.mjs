@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { setImmediate } from "node:timers";
-import { assignmentHost } from "./helpers/assignment-host.mjs";
+import { assignmentHost as host } from "./helpers/assignment-host.mjs";
+const assignmentHost = options => host({ interactiveAssignment: true, ...options });
 
 const frontmatter = { fileClass: "project", created: "2024-01-02T03:04:00", keep: ["Existing value"] };
 const reshelve = env => env.plugin.commands.get("reshelve-workflow-object").callback();
@@ -9,6 +10,18 @@ const reshelve = env => env.plugin.commands.get("reshelve-workflow-object").call
 async function openPrompt(env, completion = reshelve(env)) {
     await new Promise(resolve => setImmediate(resolve));
     const modal = env.modals.at(-1);
+    if (modal instanceof env.classes.ObjectFieldsModal) {
+        const allRows = el => [...el.rows, ...el.children.flatMap(allRows)];
+        const controls = allRows(modal.contentEl);
+        const input = controls.find(row => row.name === env.plugin.settings.fields.title).controls[0];
+        return { completion, modal, input, get error() { return modal.errorEl.text; },
+            click(text) {
+                if (text === "Cancel") return modal.close();
+                input.change(input.inputEl.value);
+                void modal.submit().then(() => { if (modal.errorEl.text) modal.close(); });
+            },
+        };
+    }
     assert.ok(modal instanceof env.classes.InputModal, "Reshelving must ask for the missing title");
     const controls = modal.contentEl.rows.flatMap(row => row.controls);
     return {
@@ -135,7 +148,7 @@ for (const operation of ["reshelve", "reassign"]) {
             assert.equal(env.file.path, "inbox/foo-bar.md");
             assert.equal(env.writes.length, 0);
             assert.equal(env.renames.length, failure === "write" ? 2 : 0);
-            assert.match(env.notices.at(-1), /Could not/);
+            assert.match(operation === "reassign" ? prompt.error : env.notices.at(-1), operation === "reassign" ? /failed/i : /Could not/);
         });
     }
     test(`${operation}: a destination collision leaves the entered title and other metadata unapplied`, async () => {
@@ -150,13 +163,13 @@ for (const operation of ["reshelve", "reassign"]) {
         assert.deepEqual(env.frontmatter, original);
         assert.equal(env.writes.length, 0);
         assert.equal(env.renames.length, 0);
-        assert.match(env.notices.at(-1), /Destination already exists/);
+        assert.match(operation === "reassign" ? prompt.error : env.notices.at(-1), /Destination already exists/);
     });
 }
 
 for (const options of [{ updateFileLocation: false }, { autoRename: false }]) {
     test(`reassignment does not request a title when renaming is disabled: ${JSON.stringify(options)}`, async () => {
-        const env = await assignmentHost({ frontmatter, path: "inbox/foo-bar.md", options });
+        const env = await assignmentHost({ frontmatter, path: "inbox/foo-bar.md", options, interactiveAssignment: false });
         await env.assign();
         assert.equal(env.modals.some(modal => modal instanceof env.classes.InputModal), false);
         assert.equal(env.file.basename, "foo-bar");

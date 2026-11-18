@@ -4,7 +4,8 @@ import { TypeService } from "../services/TypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
 import { AssignObjectTypeModal } from "../modals/AssignObjectTypeModal";
 import { getActiveFileWithMeta } from "../utils/helpers";
-import { ObjectUpdateService } from "../services/ObjectUpdateService";
+import { ObjectAssignmentDraft } from "../services/ObjectAssignmentDraft";
+import { ObjectFieldsModal } from "../modals/ObjectFieldsModal";
 
 /** Assign the active object to a chosen type, with remembered metadata and location options. */
 export async function assignObjectType(
@@ -33,7 +34,11 @@ export async function assignObjectType(
         await saveOptions(options);
 
         const { file } = active;
-        const prepared = await new ObjectUpdateService(app, settings, typeService, frontmatterService).assignType(file, options);
+        const draft = new ObjectAssignmentDraft(app, file, settings, typeService, frontmatterService, options);
+        await draft.initialize();
+        const prepared = await new ObjectFieldsModal(app, draft, {
+            title: "Edit fields for new type", submitLabel: "Assign type", locationOverrides: false,
+        }).openAndSave();
         if (!prepared) return;
         new Notice(`Assigned to "${options.targetType}": added ${prepared.added}, removed ${prepared.removed}. ${file.path}`);
     } catch (error) {

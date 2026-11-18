@@ -3,16 +3,18 @@ import { TypeAssignmentOptions, WorkflowObjectsSettings } from "../types";
 import { InputModal } from "../modals/InputModal";
 import { FrontmatterService, PreparedFrontmatterEdit } from "./FrontmatterService";
 import { TypeService } from "./TypeService";
-import { computeExistingFilePath, ensureFolderExists } from "../utils/pathUtils";
+import { computeExistingFilePath, ensureFolderExists, FilePathInfo } from "../utils/pathUtils";
 
 interface LocationOptions {
     autoRename: boolean;
     autoReshelve: boolean;
 }
 
-interface ObjectUpdateResult extends PreparedFrontmatterEdit {
+export interface ObjectUpdateResult extends PreparedFrontmatterEdit {
     moved: boolean;
 }
+
+export interface PlannedObjectUpdate extends PreparedFrontmatterEdit { path: FilePathInfo }
 
 type PrepareMetadata = (
     destination: string, original: Record<string, unknown>, suppliedTitle?: string
@@ -46,6 +48,15 @@ export class ObjectUpdateService {
             this.metadata.prepareTypeAssignment(file, options, destination, original, suppliedTitle));
     }
 
+    /** The interactive editor supplies values; relocation and metadata policy stay here. */
+    planAssignment(file: TFile, options: TypeAssignmentOptions, original: Record<string, unknown>,
+        edits: (destination: string) => Record<string, unknown>): Promise<PlannedObjectUpdate> {
+        return this.plan(file, original, {
+            autoRename: options.updateFileLocation && options.autoRename,
+            autoReshelve: options.updateFileLocation && options.autoReshelve,
+        }, destination => this.metadata.prepareTypeAssignment(file, options, destination, original, undefined, edits(destination)));
+    }
+
     /** Return null on title cancellation, before modifying the note or creating folders. */
     private async update(file: TFile, location: LocationOptions, prepare: PrepareMetadata): Promise<ObjectUpdateResult | null> {
         const sourcePath = file.path;
@@ -61,8 +72,15 @@ export class ObjectUpdateService {
             prepared = await prepare(sourcePath, original, suppliedTitle);
         }
 
-        let destination = sourcePath;
-        if (location.autoRename || location.autoReshelve) {
+        const plan = await this.plan(file, original, location, destination => prepare(destination, original, suppliedTitle), prepared);
+        return this.apply(file, plan);
+    }
+
+    private async plan(file: TFile, original: Record<string, unknown>, location: LocationOptions,
+        prepare: (destination: string) => Promise<PreparedFrontmatterEdit>, initial?: PreparedFrontmatterEdit): Promise<PlannedObjectUpdate> {
+        let destination = file.path;
+        let prepared = initial ?? await prepare(destination);
+        for (let attempt = 0; attempt < 5; attempt++) {
             // Naming may use existing values even if the metadata policy removes them.
             const context = { ...original, ...prepared.frontmatter };
             const typeField = this.types.getTypeFieldName();
@@ -72,21 +90,31 @@ export class ObjectUpdateService {
             if (/[\\/]/.test(path.basename) || path.folder.split(/[\\/]/).includes("..")) {
                 throw new Error("Path rules must produce a vault folder and a filename without folder separators");
             }
-            destination = normalizePath(path.fullPath);
-            if (destination !== sourcePath) {
-                prepared = await prepare(destination, original, suppliedTitle);
-                if (this.app.vault.getAbstractFileByPath(destination)) throw new Error(`Destination already exists: ${destination}`);
-                await ensureFolderExists(this.app, destination.slice(0, Math.max(0, destination.lastIndexOf("/"))));
-            }
+            path.fullPath = normalizePath(path.fullPath);
+            if (path.fullPath === destination) return { ...prepared, path };
+            destination = path.fullPath;
+            prepared = await prepare(destination);
         }
-        await this.metadata.assertPreparedEditCurrent(file, { ...prepared, sourcePath });
+        throw new Error("The destination rules and contextual schemas do not produce a stable location.");
+    }
+
+    /** Both interactive and bulk edits use this guarded move/write/rollback operation. */
+    async apply(file: TFile, plan: PlannedObjectUpdate): Promise<ObjectUpdateResult> {
+        const { sourcePath, original, path, ...prepared } = plan;
+        const destination = path.fullPath;
+        await this.metadata.assertPreparedEditCurrent(file, plan);
         const moved = destination !== sourcePath;
+        if (moved) {
+            if (this.app.vault.getAbstractFileByPath(destination)) throw new Error(`Destination already exists: ${destination}`);
+            await ensureFolderExists(this.app, destination.slice(0, Math.max(0, destination.lastIndexOf("/"))));
+            await this.metadata.assertPreparedEditCurrent(file, plan);
+        }
         if (moved) await this.app.fileManager.renameFile(file, destination);
         try {
             // A failed move cannot change metadata. A failed metadata write rolls
             // the move back. Pure reshelving does not rewrite unchanged metadata.
             if (JSON.stringify(prepared.frontmatter) !== JSON.stringify(original)) {
-                await this.metadata.applyPreparedEdit(file, { ...prepared, sourcePath: destination });
+                await this.metadata.applyPreparedEdit(file, { ...prepared, original, sourcePath: destination });
             }
         } catch (error) {
             if (moved) {
@@ -101,6 +129,6 @@ export class ObjectUpdateService {
             }
             throw error;
         }
-        return { ...prepared, moved };
+        return { ...prepared, original, sourcePath, moved };
     }
 }

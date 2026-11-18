@@ -1,8 +1,8 @@
 import { App, Modal, Setting } from "obsidian";
-import { CreationField, CreationFieldService, FileCandidate } from "../services/CreationFieldService";
+import { ObjectField, ObjectFieldService, FileCandidate } from "../services/ObjectFieldService";
 
 /** FileClass-style candidates, keeping multi-selection in source-view order. */
-export class CreationFilePickerModal extends Modal {
+export class ObjectFilePickerModal extends Modal {
     private selected = new Map<string, FileCandidate>();
     private items: FileCandidate[] = [];
     private resolve: ((value: FileCandidate[] | null) => void) | null = null;
@@ -12,7 +12,7 @@ export class CreationFilePickerModal extends Modal {
     private listEl!: HTMLElement;
     private statusEl!: HTMLElement;
 
-    constructor(app: App, private field: CreationField, private fields: CreationFieldService) {
+    constructor(app: App, private field: ObjectField, private fields: ObjectFieldService) {
         super(app);
         for (const candidate of field.links) this.selected.set(candidate.file.path, candidate);
     }

@@ -110,7 +110,7 @@ test("all submitted choices survive saving and plugin reload", async () => {
     dialog.control("Remove fields outside the new schema").change("never");
     dialog.control("Sort fields").change("none");
     dialog.control("New fields").change("prepend");
-    dialog.click("Assign type");
+    dialog.click("Review fields");
     await dialog.completion;
     const expected = {
         targetType: "old", updateFileLocation: false, autoRename: false, autoReshelve: false,

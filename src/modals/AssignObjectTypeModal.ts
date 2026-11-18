@@ -91,7 +91,7 @@ export class AssignObjectTypeModal extends Modal {
         positionRow.settingEl.toggle(this.options.sortMode === "none");
 
         new Setting(contentEl)
-            .addButton(button => button.setButtonText("Assign type").setCta().onClick(() => {
+            .addButton(button => button.setButtonText("Review fields").setCta().onClick(() => {
                 if (!this.typeNames.includes(this.options.targetType)) return;
                 this.submitted = true;
                 this.close();

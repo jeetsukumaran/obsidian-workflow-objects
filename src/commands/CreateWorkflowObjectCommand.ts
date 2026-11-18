@@ -3,7 +3,7 @@ import { WorkflowObjectsSettings } from "../types";
 import { TypeService } from "../services/TypeService";
 import { ObjectCreationService } from "../services/ObjectCreationService";
 import { StringSuggesterModal } from "../modals/SuggesterModal";
-import { CreateWorkflowObjectModal } from "../modals/CreateWorkflowObjectModal";
+import { ObjectFieldsModal } from "../modals/ObjectFieldsModal";
 import { getSelection, openFile } from "../utils/helpers";
 
 /** Select a schema, fill its typed draft, then create and open the object. */
@@ -18,7 +18,7 @@ export async function createNewWorkflowObject(app: App, settings: WorkflowObject
         if (!schema) throw new Error(`Schema unavailable: ${selectedType}`);
         const draft = new ObjectCreationService(app, settings, typeService, selectedType, schema, body);
         await draft.initialize();
-        const file = await new CreateWorkflowObjectModal(app, draft).openAndCreate();
+        const file = await new ObjectFieldsModal(app, draft).openAndSave();
         if (!file) return;
         new Notice(`Created: ${file.path}`);
         await openFile(app, file);

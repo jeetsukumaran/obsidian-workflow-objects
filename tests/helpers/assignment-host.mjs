@@ -7,7 +7,7 @@ import { build } from "esbuild";
 const require = createRequire(import.meta.url);
 const bundleSource = (await build({
     stdin: {
-        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal"; export { VaultCurationModal } from "./src/modals/VaultCurationModal"; export { CreateWorkflowObjectModal } from "./src/modals/CreateWorkflowObjectModal";',
+        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal"; export { VaultCurationModal } from "./src/modals/VaultCurationModal"; export { ObjectFieldsModal } from "./src/modals/ObjectFieldsModal";',
         resolveDir: fileURLToPath(new URL("../../", import.meta.url)),
     },
     bundle: true, packages: "external", platform: "node", format: "cjs", write: false,
@@ -60,6 +60,7 @@ export async function assignmentHost({
     selection = "",
     extraFiles = {},
     runtime = {},
+    interactiveAssignment = false,
     basesAdapter = { isBasesAvailable: () => false },
     generateLink = (target, sourcePath, _subpath, alias) => `[[${target.path.replace(/\.md$/, "")}${alias ? `|${alias}` : ""}]]`,
 } = {}) {
@@ -107,7 +108,10 @@ export async function assignmentHost({
                 existing.set(name, new TFolder(name));
             },
         },
-        metadataCache: { getFileCache: target => target !== file && schemas[target.path.slice("types/".length, -3)] === null ? null : ({ frontmatter: target === file ? cachedFrontmatter : schemas[target.path.slice("types/".length, -3)], tags: target === file ? cachedTags.map(tag => ({ tag })) : [] }) },
+        metadataCache: {
+            getFileCache: target => target !== file && schemas[target.path.slice("types/".length, -3)] === null ? null : ({ frontmatter: target === file ? cachedFrontmatter : schemas[target.path.slice("types/".length, -3)], tags: target === file ? cachedTags.map(tag => ({ tag })) : [] }),
+            getFirstLinkpathDest: path => app.vault.getFiles().find(target => target.path === path || target.path === path + ".md" || target.basename === path) ?? null,
+        },
         fileManager: {
             generateMarkdownLink: generateLink,
             async processFrontMatter(target, callback) {
@@ -220,11 +224,17 @@ export async function assignmentHost({
     );
     let plugin = new module.exports.default();
     await plugin.onload();
+    const openEditor = module.exports.ObjectFieldsModal.prototype.openAndSave;
+    module.exports.ObjectFieldsModal.prototype.openAndSave = function () {
+        // Policy/relocation tests submit the unchanged draft; editor tests exercise the actual UI.
+        return !interactiveAssignment && this.options.submitLabel === "Assign type" ? this.draft.save() : openEditor.call(this);
+    };
     return {
         file, app, notices, errors, writes, renames, folders, saves, modals, body, created, opened, classes: module.exports,
         get plugin() { return plugin; },
         get frontmatter() { return current; },
         get saved() { return saved; },
+        changeFrontmatter(value) { current = clone(value); },
         async reload() { plugin = new module.exports.default(); await plugin.onload(); },
         open() {
             const command = plugin.commands.get("assign-object-to-different-type");
@@ -236,6 +246,6 @@ export async function assignmentHost({
             const click = text => modal.contentEl.rows.flatMap(item => item.controls).find(item => item.text === text).click();
             return { completion, modal, row, control, click };
         },
-        async assign() { const dialog = this.open(); dialog.click("Assign type"); await dialog.completion; },
+        async assign() { const dialog = this.open(); dialog.click("Review fields"); await dialog.completion; },
     };
 }

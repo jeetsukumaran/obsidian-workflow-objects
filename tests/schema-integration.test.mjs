@@ -281,9 +281,9 @@ test("new note creation uses inherited root fields and does not flatten nested c
         fields: [field("group", "Object"), field("child", "Input", { path: "groupId" })], fieldsOrder: ["group", "inherited"],
     } } });
     env.classes.StringSuggesterModal.prototype.openAndGetValue = async () => "project";
-    env.classes.CreateWorkflowObjectModal.prototype.openAndCreate = async function () {
+    env.classes.ObjectFieldsModal.prototype.openAndSave = async function () {
         this.draft.fields.find(field => field.definition.name === "title").text = "Created title";
-        return this.draft.create();
+        return this.draft.save();
     };
     await env.plugin.commands.get("create-new-workflow-object").callback();
     assert.equal(env.created.length, 1);

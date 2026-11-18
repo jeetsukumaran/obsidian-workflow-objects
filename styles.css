@@ -385,6 +385,10 @@
     width: 100%;
 }
 
+.wfo-create-modal .wfo-create-text-field .setting-item-control {
+    flex-wrap: wrap;
+}
+
 .wfo-create-modal textarea {
     resize: vertical;
     min-height: 72px;

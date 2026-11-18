@@ -1,17 +1,31 @@
-import { App, ButtonComponent, Modal, Setting, TextComponent, TFile } from "obsidian";
-import { CreationField, DATE_INPUTS, fieldOptions, isLinkField, isListField } from "../services/CreationFieldService";
-import { ObjectCreationService } from "../services/ObjectCreationService";
-import { CreationFilePickerModal } from "./CreationFilePickerModal";
+import { App, ButtonComponent, Modal, Setting, TextComponent } from "obsidian";
+import { ObjectField, ObjectFieldService, DATE_INPUTS, fieldOptions, isLinkField, isListField } from "../services/ObjectFieldService";
+import { FilePathInfo } from "../utils/pathUtils";
+import { ObjectFilePickerModal } from "./ObjectFilePickerModal";
 
-/** Edit the complete draft before creating any vault file. Errors keep the form open. */
-export class CreateWorkflowObjectModal extends Modal {
-    private resolve: ((file: TFile | null) => void) | null = null;
-    private result: TFile | null = null;
+export interface ObjectFormDraft<Result> {
+    typeName: string;
+    fields: ObjectField[];
+    fieldService: ObjectFieldService;
+    folderOverride?: string;
+    filenameOverride?: string;
+    summary?: string;
+    preview(): Promise<FilePathInfo>;
+    save(): Promise<Result>;
+}
+
+/** Shared field editing and validation for creation and type reassignment. */
+export class ObjectFieldsModal<Result> extends Modal {
+    private resolve: ((result: Result | null) => void) | null = null;
+    private result: Result | null = null;
     private saving = false;
     private closed = false;
     private pendingEditors = 0;
     private previewGeneration = 0;
     private formEl!: HTMLFieldSetElement;
+    private fieldsEl!: HTMLElement;
+    private summaryEl!: HTMLElement;
+    private renderedFields: ObjectField[] = [];
     private errorEl!: HTMLElement;
     private previewEl!: HTMLElement;
     private directoryInput!: TextComponent;
@@ -19,33 +33,56 @@ export class CreateWorkflowObjectModal extends Modal {
     private createButton!: ButtonComponent;
     private cancelButton!: ButtonComponent;
 
-    constructor(app: App, readonly draft: ObjectCreationService) { super(app); }
+    constructor(app: App, readonly draft: ObjectFormDraft<Result>, private options = {
+        title: "Create workflow object", submitLabel: "Create object", locationOverrides: true,
+    }) { super(app); }
 
     onOpen(): void {
         this.modalEl.addClass("wfo-create-modal");
-        this.contentEl.createEl("h2", { text: "Create workflow object" });
+        this.contentEl.createEl("h2", { text: this.options.title });
         this.contentEl.createEl("p", { text: `Object type: ${this.draft.typeName}`, cls: "wfo-create-type" });
         this.formEl = this.contentEl.createEl("fieldset", { cls: "wfo-create-form" });
-        this.renderFields(this.formEl, this.draft.fields);
-        this.renderLocation();
+        this.fieldsEl = this.formEl.createDiv();
+        this.renderedFields = this.draft.fields;
+        this.renderFields(this.fieldsEl, this.draft.fields);
+        if (this.options.locationOverrides) this.renderLocation();
+        else this.previewEl = this.formEl.createEl("p", { cls: "wfo-create-path", attr: { "aria-live": "polite" } });
+        this.summaryEl = this.formEl.createEl("p", { cls: "setting-item-description", attr: { "aria-live": "polite" } });
         this.errorEl = this.contentEl.createEl("p", { cls: "wfo-create-error", attr: { role: "alert" } });
         new Setting(this.contentEl).setClass("wfo-create-actions")
             .addButton(button => {
-                this.createButton = button.setButtonText("Create object").setCta().onClick(() => { void this.submit(); });
+                this.createButton = button.setButtonText(this.options.submitLabel).setCta().onClick(() => { void this.submit(); });
             })
             .addButton(button => { this.cancelButton = button.setButtonText("Cancel").onClick(() => this.close()); });
         this.refreshPreview();
         this.contentEl.querySelector<HTMLTextAreaElement>("textarea")?.focus();
     }
 
-    private renderFields(parent: HTMLElement, fields: CreationField[]): void {
+    private renderFields(parent: HTMLElement, fields: ObjectField[]): void {
         for (const field of fields) {
             const { definition, kind } = field;
             const options = fieldOptions(definition);
             const section = parent.createDiv({ cls: "wfo-create-field" });
             const row = new Setting(section).setName(definition.name).setDesc(field.hint || definition.type);
-            const changed = (): void => { this.refreshPreview(); };
-            if (kind === "object" && field.children.length) {
+            const changed = (): void => { field.dirty = true; this.refreshPreview(); };
+            if (field.raw) {
+                row.settingEl.addClass("wfo-create-text-field");
+                row.setDesc("Existing value does not match the new field type. Edit as JSON, or switch to the schema input.");
+                row.addTextArea(text => {
+                    text.inputEl.rows = 3;
+                    text.inputEl.setAttribute("aria-label", definition.name);
+                    text.setValue(field.text).onChange(value => { field.text = value; changed(); });
+                }).addButton(button => button.setButtonText("Use schema input").onClick(async () => {
+                    this.pendingEditors++;
+                    button.setDisabled(true);
+                    try {
+                        const [replacement] = await this.draft.fieldService.makeFields([definition]);
+                        if (this.closed) return;
+                        Object.assign(field, replacement, { dirty: true, raw: false, initial: undefined });
+                        this.fieldsEl.empty(); this.renderFields(this.fieldsEl, this.draft.fields); changed();
+                    } finally { this.pendingEditors--; button.setDisabled(false); }
+                }));
+            } else if (kind === "object" && field.children.length) {
                 this.renderFields(section.createDiv({ cls: "wfo-create-nested" }), field.children);
             } else if (kind === "objectlist" && this.draft.fieldService.childDefinitions(field).length) {
                 const items = section.createDiv({ cls: "wfo-create-nested" });
@@ -59,6 +96,7 @@ export class CreateWorkflowObjectModal extends Modal {
                         this.renderFields(container, item);
                     });
                 };
+                renderItems();
                 row.addButton(button => button.setButtonText("Add item").onClick(async () => {
                     this.pendingEditors++;
                     button.setDisabled(true);
@@ -72,7 +110,7 @@ export class CreateWorkflowObjectModal extends Modal {
                 const display = (): void => selected.setText(field.links.map(item => item.display).join(", ") || "No files selected");
                 display();
                 row.addButton(button => button.setButtonText("Choose files").onClick(async () => {
-                    const links = await new CreationFilePickerModal(this.app, field, this.draft.fieldService).openAndGetValue();
+                    const links = await new ObjectFilePickerModal(this.app, field, this.draft.fieldService).openAndGetValue();
                     if (links && !this.closed) { field.links = links; display(); changed(); }
                 })).addButton(button => button.setButtonText("Clear").onClick(() => { field.links = []; display(); changed(); }));
             } else if (kind === "boolean" || kind === "checkbox") {
@@ -97,7 +135,7 @@ export class CreateWorkflowObjectModal extends Modal {
                 });
             } else if (kind === "multi" && field.choices.length) {
                 const choices = section.createDiv({ cls: "wfo-create-choices" });
-                for (const value of field.choices) new Setting(choices).setName(value).addToggle(toggle => toggle.onChange(checked => {
+                for (const value of field.choices) new Setting(choices).setName(value).addToggle(toggle => toggle.setValue(field.selectedChoices.includes(value)).onChange(checked => {
                     field.selectedChoices = checked ? [...field.selectedChoices, value] : field.selectedChoices.filter(item => item !== value);
                     changed();
                 }));
@@ -152,8 +190,13 @@ export class CreateWorkflowObjectModal extends Modal {
         void this.draft.preview().then(path => {
             if (generation !== this.previewGeneration) return;
             this.previewEl.setText(`Destination: ${path.fullPath}`);
-            if (this.draft.folderOverride === undefined) this.directoryInput.setValue(path.folder);
-            if (this.draft.filenameOverride === undefined) this.filenameInput.setValue(`${path.basename}.md`);
+            if (this.draft.folderOverride === undefined) this.directoryInput?.setValue(path.folder);
+            if (this.draft.filenameOverride === undefined) this.filenameInput?.setValue(`${path.basename}.md`);
+            this.summaryEl.setText(this.draft.summary ?? "");
+            if (this.renderedFields !== this.draft.fields) {
+                this.renderedFields = this.draft.fields;
+                this.fieldsEl.empty(); this.renderFields(this.fieldsEl, this.draft.fields);
+            }
         }).catch((error: unknown) => {
             if (generation === this.previewGeneration) this.previewEl.setText(error instanceof Error ? error.message : String(error));
         });
@@ -171,12 +214,13 @@ export class CreateWorkflowObjectModal extends Modal {
         this.createButton.setDisabled(true);
         this.cancelButton.setDisabled(true);
         try {
-            this.result = await this.draft.create();
+            this.result = await this.draft.save();
             this.saving = false;
             this.close();
         } catch (error) {
             this.errorEl.setText(error instanceof Error ? error.message : String(error));
             this.errorEl.scrollIntoView({ block: "nearest" });
+            this.refreshPreview();
         } finally {
             this.saving = false;
             this.formEl.disabled = false;
@@ -196,7 +240,7 @@ export class CreateWorkflowObjectModal extends Modal {
         this.resolve = null;
     }
 
-    openAndCreate(): Promise<TFile | null> {
+    openAndSave(): Promise<Result | null> {
         return new Promise(resolve => { this.resolve = resolve; this.open(); });
     }
 }

@@ -2,13 +2,13 @@ import { App, normalizePath, stringifyYaml, TFile, TFolder } from "obsidian";
 import { FieldDefinition, TypeFieldInfo, WorkflowObjectsSettings } from "../types";
 import { sortEntries } from "../utils/helpers";
 import { computeFilePath, ensureFolderExists, FilePathInfo } from "../utils/pathUtils";
-import { CreationField, CreationFieldService } from "./CreationFieldService";
+import { ObjectField, ObjectFieldService } from "./ObjectFieldService";
 import { TypeService } from "./TypeService";
 
 /** One creation draft owns field values, destination preview, and the final write. */
 export class ObjectCreationService {
-    fields: CreationField[] = [];
-    readonly fieldService: CreationFieldService;
+    fields: ObjectField[] = [];
+    readonly fieldService: ObjectFieldService;
     folderOverride: string | undefined;
     filenameOverride: string | undefined;
     private createdAt = new Date();
@@ -21,7 +21,7 @@ export class ObjectCreationService {
         private schema: TypeFieldInfo,
         private body: string
     ) {
-        this.fieldService = new CreationFieldService(app, [...schema.fields, ...schema.nestedFields], field => types.getDateFormat(field), this.createdAt);
+        this.fieldService = new ObjectFieldService(app, [...schema.fields, ...schema.nestedFields], field => types.getDateFormat(field), this.createdAt);
     }
 
     async initialize(): Promise<void> {
@@ -88,7 +88,7 @@ export class ObjectCreationService {
 
     async preview(): Promise<FilePathInfo> { return (await this.prepare(false)).path; }
 
-    async create(): Promise<TFile> {
+    async save(): Promise<TFile> {
         const latest = await this.types.getTypeFieldInfo(this.typeName);
         if (!latest || JSON.stringify([latest.fields, latest.nestedFields]) !== JSON.stringify([this.schema.fields, this.schema.nestedFields])) {
             throw new Error("The type schema changed while this form was open. Reopen the creation form to use its current fields.");

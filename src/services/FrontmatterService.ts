@@ -73,12 +73,14 @@ export class FrontmatterService {
         options: TypeAssignmentOptions,
         destination = file.path,
         original?: Record<string, unknown>,
-        suppliedTitle?: string
+        suppliedTitle?: string,
+        edits: Record<string, unknown> = {}
     ): Promise<PreparedFrontmatterEdit> {
         original ??= await this.readFrontmatter(file);
         const schemaSignature = this.typeService.schemaSignature(file);
         const typeField = this.typeService.getTypeFieldName();
-        const resolution = await this.typeService.resolveNoteSchema(file, { ...original, [typeField]: options.targetType }, destination);
+        const input = { ...original, ...edits };
+        const resolution = await this.typeService.resolveNoteSchema(file, { ...input, [typeField]: options.targetType }, destination);
         if (!resolution.schemaComplete || !resolution.typeInfo) {
             throw new Error(resolution.issues.join("; ") || `No field schema available for type "${options.targetType}"`);
         }
@@ -86,17 +88,21 @@ export class FrontmatterService {
         const titleField = this.settings.fields.title;
         // An explicitly entered title is part of this edit, even when the
         // destination schema does not declare it.
-        if (suppliedTitle !== undefined) protectedFields.add(titleField);
+        if (suppliedTitle !== undefined || Object.prototype.hasOwnProperty.call(edits, titleField)) protectedFields.add(titleField);
         let removed = 0;
+        const removeField = (key: string, value: unknown): boolean => !protectedFields.has(key) && !typeInfo.definedFields.has(key) &&
+            (options.removeFields === "all" || (options.removeFields === "empty" && isEmptyValue(value)));
         const retained = Object.entries(original).filter(([key, value]) => {
-            const remove = !protectedFields.has(key) && !typeInfo.definedFields.has(key) &&
-                (options.removeFields === "all" || (options.removeFields === "empty" && isEmptyValue(value)));
+            const remove = removeField(key, Object.prototype.hasOwnProperty.call(edits, key) ? edits[key] : value);
             if (remove) removed++;
             return !remove;
-        }).map(([key, value]): [string, unknown] => [key, key === typeField ? options.targetType
-            : key === titleField && suppliedTitle !== undefined ? suppliedTitle : value]);
+        }).map(([key]): [string, unknown] => [key, key === typeField ? options.targetType
+            : key === titleField && suppliedTitle !== undefined ? suppliedTitle : input[key]]);
         const frontmatter: Record<string, unknown> = Object.fromEntries(retained);
         const defaults = options.addMissingFields ? new Map(typeInfo.fieldDefaults) : new Map<string, unknown>();
+        for (const [key, value] of Object.entries(edits)) {
+            if (!Object.prototype.hasOwnProperty.call(original, key) && !removeField(key, value)) defaults.set(key, value);
+        }
         if (suppliedTitle !== undefined) defaults.set(titleField, suppliedTitle);
         defaults.set(typeField, options.targetType);
         const mode = options.sortMode === "none" ? options.newFieldsPosition : options.sortMode;

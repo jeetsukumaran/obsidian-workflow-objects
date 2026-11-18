@@ -183,7 +183,7 @@ test("file pickers preserve Base group order, display aliases, and links relativ
     assert.deepEqual(frontmatter(env).related, ["[Last name](../refs/z.md)", "[First name](../refs/a.md)"]);
     assert.equal(frontmatter(env).cover, "[cover](../images/cover.png)");
     assert.ok(generated.slice(-3).every(call => call.source === env.created[0].path));
-    assert.deepEqual(calls, [["links.base", "Ordered"]]);
+    assert.deepEqual(calls, [["links.base", "Ordered", undefined]]);
 });
 
 test("picker falls back visibly when Bases is unavailable, and cancelling preserves the draft", async () => {

@@ -4,9 +4,12 @@ import { getDefaultValueForType } from "../utils/helpers";
 import { resolveDefinition, stringList } from "../schema/definitions";
 
 type Source = Exclude<WorkflowObjectsSettings["schemaSource"], "auto">;
-interface SchemaPlugin {
+export interface SchemaPlugin {
     settings?: Record<string, unknown>;
     api?: { version?: string; getSchema?: (name: string) => Promise<{ fields: FieldDefinition[] } | null> };
+    saveSettings?: () => Promise<void>;
+    /** Metadata Menu's saveSettings serializes this live list into fileClassQueries. */
+    initialFileClassQueries?: Record<string, unknown>[];
 }
 interface Bookmark { type: string; title?: string; path?: string; items?: Bookmark[] }
 
@@ -26,6 +29,17 @@ export class TypeService {
 
     private providerSettings(): Record<string, unknown> {
         return this.plugin(this.getSource())?.settings ?? {};
+    }
+
+    /** Only edit provider configuration when it describes the same schema folder. */
+    getSchemaProviderForEdits(): SchemaPlugin | undefined {
+        const source = this.getSource();
+        if (source === "standalone") return undefined;
+        const provider = this.plugin(source);
+        if (!provider) throw new Error(`Schema integration is not enabled: ${source}`);
+        const folder = provider.settings?.classFilesPath;
+        return typeof folder === "string" && folder.replace(/^\/+|\/+$/g, "") === this.getTypesPath()
+            ? provider : undefined;
     }
 
     /** FileClass has separate write formats; a blank default means native ISO. */

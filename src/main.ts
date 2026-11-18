@@ -20,6 +20,7 @@ import {
     curateVault,
     createWorkflowObjectCatalog,
     cloneObjectType,
+    renameType,
     copyFieldsFrom,
     bulkAssignType,
     assignObjectType,
@@ -225,6 +226,14 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 cloneObjectType(this.app, this.settings, this.typeService),
         });
 
+        // Rename type command
+        this.addCommand({
+            id: "rename-type",
+            name: "Rename type",
+            callback: () => renameType(this.app, this.settings, this.typeService,
+                this.frontmatterService, () => this.saveSettings()),
+        });
+
         // Copy fields commands
         this.addCommand({
             id: "copy-fields-from",
@@ -246,7 +255,7 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 ),
         });
 
-        // File-explorer context menu: show "Copy fields from…" on type definition files
+        // Schema operations in the file-explorer context menu.
         this.registerEvent(
             this.app.workspace.on(
                 "file-menu",
@@ -254,6 +263,9 @@ export default class WorkflowObjectsPlugin extends Plugin {
                     if (!(file instanceof TFile)) return;
                     if (!this.typeService.isTypeDefinitionFile(file)) return;
                     menu.addSeparator();
+                    menu.addItem(item => item.setTitle("Rename type").setIcon("pencil").setSection("action")
+                        .onClick(() => renameType(this.app, this.settings, this.typeService,
+                            this.frontmatterService, () => this.saveSettings(), file)));
                     menu.addItem((item) =>
                         item
                             .setTitle("Copy fields from…")

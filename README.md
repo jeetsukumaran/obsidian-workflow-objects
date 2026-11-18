@@ -53,8 +53,8 @@ first explicit type, otherwise the first contextual type, then the global type.
 Metadata Menu presets. Existing preset values remain ordinary note properties:
 normal insertion preserves them, and cleanup follows the selected removal
 policy. To retain shared fields as schema members, declare them in a class,
-parent class, or applicable global class. This update does not edit another
-plugin's settings or migrate any notes automatically.
+parent class, or applicable global class. Changing the schema source does not
+edit another plugin's settings or migrate notes automatically.
 
 A missing parent, malformed schema, inheritance cycle, stale Fileclass index,
 or unavailable selected integration prevents schema-based deletion. Cleanup
@@ -285,6 +285,43 @@ The new type definition file opens automatically after creation.
 > **Note:** The Metadata Menu public API covers field-value operations only and does not expose fileClass creation. The clone is written directly to the vault using the same `processFrontMatter` mechanism Metadata Menu itself uses to maintain fileClass definitions.
 
 ---
+
+### Rename type
+
+**Workflow Objects: Rename type** opens a dialog with a type selector and a new
+name. The active note's type is selected initially. The command is also available
+from a type definition's file-explorer context menu. Names must be unique,
+including case-insensitive collisions, and omit `.md`. Include the relative
+subfolder for nested names, such as `work/project`.
+
+The command renames the schema note in the configured types folder and scans
+every Markdown file in the vault, including templates and schema notes. It
+replaces exact occurrences of the old type in the configured type field,
+preserving scalar values, lists, and legacy comma-separated declarations.
+Child schemas' `extends` references and child-class selections in Metadata Menu
+saved views are updated. Field definitions, field IDs,
+unrelated properties, and note contents are retained. Existing object filenames
+and directories stay unchanged; Obsidian updates links to the renamed schema
+according to the vault's link-update preference.
+
+Standalone, Fileclass, and Metadata Menu use the same schema-file migration.
+When the selected integration manages that schema folder, the command also
+updates declarations using its alias, its global class setting, and Metadata
+Menu query bindings' target class names. Existing implicit tag bindings are
+preserved by adding the old class name to `tagNames`. Fileclass's implicit Base
+view name is made explicit when necessary to keep the existing view accessible.
+The last selected assignment type and exact anchored literal patterns in
+Workflow Objects' filename and path mappings are updated and saved.
+
+Custom regex patterns, templates, Base filters, Dataview queries, and scripts
+can contain class names as executable expressions; these require manual review.
+The command does not search and replace arbitrary text inside them.
+
+The scan reads current file contents. Invalid metadata or a name collision stops
+the operation. A write failure triggers rollback of completed changes; concurrent
+edits to affected properties stop the operation rather than being overwritten.
+The dialog reports any files or settings that could not be restored. Cancel
+before starting leaves the vault unchanged.
 
 ### Copy fields from…
 

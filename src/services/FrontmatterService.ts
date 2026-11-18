@@ -123,6 +123,26 @@ export class FrontmatterService {
         });
     }
 
+    /** Change selected keys without overwriting unrelated edits or link updates. */
+    async applyFieldPatch(file: TFile, sourcePath: string, before: Record<string, unknown>, after: Record<string, unknown>): Promise<void> {
+        const present = (fm: Record<string, unknown>, key: string) => Object.prototype.hasOwnProperty.call(fm, key);
+        const equal = (a: Record<string, unknown>, b: Record<string, unknown>, key: string) =>
+            present(a, key) === present(b, key) && JSON.stringify(a[key]) === JSON.stringify(b[key]);
+        const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(key => !equal(before, after, key));
+        if (!keys.length) return;
+        await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+            if (file.path !== sourcePath || keys.some(key => !equal(fm, before, key))) {
+                throw new Error(`Metadata changed during rename: ${sourcePath}`);
+            }
+            for (const key of keys) {
+                if (present(after, key)) Object.defineProperty(fm, key, {
+                    value: after[key], enumerable: true, configurable: true, writable: true,
+                });
+                else delete fm[key];
+            }
+        });
+    }
+
     private validatePreparedEdit(file: TFile, fm: Record<string, unknown>, prepared: PreparedFrontmatterEdit): void {
         if (prepared.schemaSignature && prepared.schemaSignature !== this.typeService.schemaSignature(file)) {
             throw new Error("The schema or class bindings changed while preparing the edit. Run the command again.");

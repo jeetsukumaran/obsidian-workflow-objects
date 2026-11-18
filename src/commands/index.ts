@@ -30,6 +30,8 @@ export { createWorkflowObjectCatalog } from "./CreateCatalogCommand";
 
 export { cloneObjectType } from "./CloneObjectTypeCommand";
 
+export { renameType } from "./RenameTypeCommand";
+
 export { copyFieldsFrom } from "./CopyFieldsFromCommand";
 
 export { bulkAssignType } from "./BulkAssignTypeCommand";

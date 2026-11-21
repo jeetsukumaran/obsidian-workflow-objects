@@ -1,6 +1,6 @@
 import { App, Notice, TFile } from "obsidian";
-import { WorkflowObjectsSettings } from "../types";
-import { TypeService } from "../services/TypeService";
+import { TypedNoteWorkflowsSettings } from "../types";
+import { NoteTypeService } from "../services/NoteTypeService";
 import { SuggesterModal, StringSuggesterModal } from "../modals";
 import {
     getActiveFileWithMeta,
@@ -8,24 +8,24 @@ import {
 } from "../utils/helpers";
 
 /**
- * Navigate to adjacent workflow object with same type
+ * Navigate to an adjacent typed note with the same note type
  * @param direction 1 for next, -1 for previous
  */
 export async function navigate(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     direction: 1 | -1
 ): Promise<void> {
     const result = getActiveFileWithMeta(app);
     if (!result) return;
 
     const { file, frontmatter } = result;
-    const typeValue = typeService.getPrimaryType(file, frontmatter);
-    if (!typeValue) { new Notice("No object type applies to this note"); return; }
+    const noteTypeValue = noteTypeService.getPrimaryNoteType(file, frontmatter);
+    if (!noteTypeValue) { new Notice("No note type applies to this note"); return; }
 
-    const matches = typeService.getFilesOfType(typeValue)
-        .sort((a, b) => settings.objectSortDirection === "desc" ? b.path.localeCompare(a.path) : a.path.localeCompare(b.path));
+    const matches = noteTypeService.getTypedNotesOfType(noteTypeValue)
+        .sort((a, b) => settings.typedNoteSortDirection === "desc" ? b.path.localeCompare(a.path) : a.path.localeCompare(b.path));
     const idx = matches.findIndex((f) => f.path === file.path);
 
     if (idx === -1) {
@@ -45,60 +45,60 @@ export async function navigate(
         await openFile(app, matches[target]);
         new Notice(`${target + 1}/${matches.length}`);
     } else {
-        new Notice(`Only 1 workflow object of type "${typeValue}"`);
+        new Notice(`Only one typed note with note type "${noteTypeValue}"`);
     }
 }
 
 /**
- * Navigate to next workflow object
+ * Navigate to the next typed note
  */
 export async function navigateNext(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService
 ): Promise<void> {
-    return navigate(app, settings, typeService, 1);
+    return navigate(app, settings, noteTypeService, 1);
 }
 
 /**
- * Navigate to previous workflow object
+ * Navigate to the previous typed note
  */
 export async function navigatePrevious(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService
 ): Promise<void> {
-    return navigate(app, settings, typeService, -1);
+    return navigate(app, settings, noteTypeService, -1);
 }
 
 /**
- * Open a workflow object by type selection, then file selection
+ * Open a typed note by note type selection, then file selection
  */
-export async function openWorkflowObject(
+export async function openTypedNote(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService
 ): Promise<void> {
-    const typeNames = typeService.getTypeNames();
-    if (!typeNames) return;
+    const noteTypeNames = noteTypeService.getAvailableNoteTypeNames();
+    if (!noteTypeNames) return;
 
-    const typeField = typeService.getTypeFieldName();
+    const noteTypeField = noteTypeService.getNoteTypeFieldName();
 
-    // Select type
-    const typeSuggester = new StringSuggesterModal(
+    // Select note type
+    const noteTypeSuggester = new StringSuggesterModal(
         app,
-        typeNames,
-        "Open workflow object of type"
+        noteTypeNames,
+        "Open typed note — choose note type"
     );
-    const selectedType = await typeSuggester.openAndGetValue();
-    if (!selectedType) return;
+    const selectedNoteType = await noteTypeSuggester.openAndGetValue();
+    if (!selectedNoteType) return;
 
-    // Get files of that type (sorted according to settings)
-    const matchingFiles = typeService.getFilesOfType(selectedType)
-        .sort((a, b) => settings.objectSortDirection === "desc" ? b.path.localeCompare(a.path) : a.path.localeCompare(b.path));
+    // Get typed notes of that note type (sorted according to settings)
+    const matchingFiles = noteTypeService.getTypedNotesOfType(selectedNoteType)
+        .sort((a, b) => settings.typedNoteSortDirection === "desc" ? b.path.localeCompare(a.path) : a.path.localeCompare(b.path));
 
     if (!matchingFiles.length) {
-        new Notice(`No notes with ${typeField}: "${selectedType}"`);
+        new Notice(`No notes with ${noteTypeField}: "${selectedNoteType}"`);
         return;
     }
 
@@ -107,7 +107,7 @@ export async function openWorkflowObject(
         app,
         matchingFiles,
         (f) => f.path.replace(/\.md$/, ""),
-        `${selectedType} (${matchingFiles.length})`
+        `${selectedNoteType} (${matchingFiles.length})`
     );
 
     const selectedFile = await fileSuggester.openAndGetValue();

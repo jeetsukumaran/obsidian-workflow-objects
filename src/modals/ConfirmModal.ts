@@ -30,7 +30,7 @@ export class ConfirmModal extends Modal {
 
         contentEl.createEl("h3", { text: this.title });
         
-        const msgEl = contentEl.createEl("div", { cls: "workflow-objects-confirm-message" });
+        const msgEl = contentEl.createEl("div", { cls: "tnw-confirm-message" });
         msgEl.setCssProps({ "white-space": "pre-wrap", "margin-bottom": "1em" });
         msgEl.setText(this.message);
 

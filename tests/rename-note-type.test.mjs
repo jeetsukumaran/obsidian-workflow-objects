@@ -75,16 +75,16 @@ async function host({ source = "none", settings = {}, providerSettings = {}, fil
         ...env, all, texts, original, add, fileAt, read, put, writes, renames, provider, providerSaves: saves,
         get saved() { return env.saved; },
         async open() {
-            const command = env.plugin.commands.get("rename-type");
-            assert.equal(command.name, "Rename type");
+            const command = env.plugin.commands.get("rename-note-type");
+            assert.equal(command.name, "Rename note type");
             const done = command.callback();
             await tick();
             const modal = env.modals.at(-1);
             const controls = () => modal.contentEl.rows.flatMap(row => row.controls);
             const control = name => modal.contentEl.rows.find(row => row.name === name).controls[0];
-            const rename = controls().find(control => control.text === "Rename type");
+            const rename = controls().find(control => control.text === "Rename note type");
             return { modal, done, control, rename, async submit(name = "new", old = "old") {
-                control("Type").change(old);
+                control("Note type").change(old);
                 control("New name").change(name);
                 assert.equal(rename.disabled, false);
                 await rename.click();
@@ -257,7 +257,7 @@ test("a newly created old-type note is detected by final verification", async ()
     const env = await host({ hooks });
     hooks.afterWrite = () => { delete hooks.afterWrite; env.add("newly-created.md", { fileClass: "old" }); };
     const dialog = await env.open(); await dialog.submit();
-    assert.match(dialog.modal.status.text, /old type declaration appeared/);
+    assert.match(dialog.modal.status.text, /old note type declaration appeared/);
     env.assertOriginal();
     assert.equal(env.read("newly-created.md").fileClass, "old");
     dialog.modal.close(); await dialog.done;
@@ -275,7 +275,7 @@ test("rollback failures name the remaining affected files", async () => {
 
 test("selected unavailable integration is rejected before opening the dialog", async () => {
     const env = await host({ settings: { schemaSource: "fileclass" } });
-    await env.plugin.commands.get("rename-type").callback();
+    await env.plugin.commands.get("rename-note-type").callback();
     assert.equal(env.modals.length, 0);
     assert.match(env.notices.at(-1), /not enabled: fileclass/);
 });
@@ -297,7 +297,7 @@ test("concurrent rename attempts cannot interleave writes", async () => {
     assert.deepEqual(env.renames, [["types/old.md", "types/new.md"]]);
 });
 
-test("the type definition context menu preselects its type", async () => {
+test("the note type definition context menu preselects its type", async () => {
     const env = await host({ files: { "types/another.md": definition } });
     let handler;
     env.app.workspace.on = (event, callback) => { if (event === "file-menu") handler = callback; return {}; };
@@ -307,10 +307,10 @@ test("the type definition context menu preselects its type", async () => {
         const item = { setTitle(value) { this.title = value; return this; }, setIcon() { return this; }, setSection() { return this; }, onClick(callback) { this.callback = callback; return this; } };
         fn(item); items.push(item);
     } }, env.fileAt("types/another.md"));
-    const done = items.find(item => item.title === "Rename type").callback();
+    const done = items.find(item => item.title === "Rename note type").callback();
     await tick();
     const modal = env.modals.at(-1);
-    assert.equal(modal.contentEl.rows.find(row => row.name === "Type").controls[0].value, "another");
+    assert.equal(modal.contentEl.rows.find(row => row.name === "Note type").controls[0].value, "another");
     modal.close(); await done;
     assert.deepEqual(env.renames, []);
 });

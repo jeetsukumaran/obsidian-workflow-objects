@@ -1,2 +1,2 @@
-export { TypeService } from "./TypeService";
+export { NoteTypeService } from "./NoteTypeService";
 export { FrontmatterService } from "./FrontmatterService";

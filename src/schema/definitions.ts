@@ -1,4 +1,4 @@
-import { FieldDefinition, TypeDefinitionFrontmatter } from "../types";
+import { FieldDefinition, NoteTypeDefinitionFrontmatter } from "../types";
 
 /** Strings used by fileClass names, exclusions, tags, and legacy list encodings. */
 export function stringList(value: unknown): string[] {
@@ -17,7 +17,7 @@ export interface ResolvedDefinition {
 /** Resolve root fields without promoting nested children into note properties. */
 export function resolveDefinition(
     name: string,
-    read: (name: string) => TypeDefinitionFrontmatter | null,
+    read: (name: string) => NoteTypeDefinitionFrontmatter | null,
     metadataMenu: boolean
 ): ResolvedDefinition {
     const issues: string[] = [];
@@ -30,19 +30,19 @@ export function resolveDefinition(
         if (seen.has(current)) { issues.push(`Inheritance cycle at "${current}"`); break; }
         seen.add(current);
         const fm = read(current);
-        if (!fm) { issues.push(`No field schema available for type "${current}"`); break; }
+        if (!fm) { issues.push(`No field schema available for note type "${current}"`); break; }
         if (!chain.length) {
             order = stringList(fm.fieldsOrder);
             stringList(fm.excludes).forEach(key => excluded.add(key));
         }
         const fields: FieldDefinition[] = [];
         if (fm.fields !== undefined && !Array.isArray(fm.fields)) {
-            issues.push(`Invalid fields in type "${current}"`);
+            issues.push(`Invalid fields in note type "${current}"`);
         } else {
             for (const field of fm.fields ?? []) {
                 if (!field || typeof field.name !== "string" || !field.name ||
                     (field.path !== undefined && typeof field.path !== "string")) {
-                    issues.push(`Invalid field in type "${current}"`);
+                    issues.push(`Invalid field in note type "${current}"`);
                 } else {
                     fields.push({ ...field, type: typeof field.type === "string" ? field.type : "Input" });
                 }
@@ -51,7 +51,7 @@ export function resolveDefinition(
         chain.push({ name: current, fields, excluded: new Set(excluded) });
         stringList(fm.excludes).forEach(key => excluded.add(key));
         if (fm.extends != null && typeof fm.extends !== "string") {
-            issues.push(`Invalid parent of type "${current}"`);
+            issues.push(`Invalid parent of note type "${current}"`);
             break;
         }
         current = typeof fm.extends === "string" ? fm.extends.trim() : "";

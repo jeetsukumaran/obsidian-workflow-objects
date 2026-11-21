@@ -1,6 +1,6 @@
 import { App, TFile } from "obsidian";
 import { Liquid } from "liquidjs";
-import { WorkflowObjectsSettings } from "../types";
+import { TypedNoteWorkflowsSettings } from "../types";
 import { sanitizeFilename } from "./helpers";
 
 const DATE_PREFIX_REGEX = /^(\d{8}T\d{4})--/;
@@ -80,21 +80,21 @@ export async function expandTemplate(template: string, ctx: TemplateContext): Pr
 // ─── Path / filename helpers ──────────────────────────────────────────────────
 
 /**
- * Determine destination folder based on content-type and path mappings.
+ * Determine destination folder based on note type and path mappings.
  *
  * Each mapping is `[regexPattern, liquidTemplate]`.  Regex capture groups are
  * expanded first (`$1`, `$2`, …), then the result is processed as a LiquidJS
  * template with the full frontmatter context.
  */
 export async function getDestinationFolder(
-    typeValue: string | null | undefined,
+    noteTypeValue: string | null | undefined,
     pathMappings: [string, string][],
     ctx: TemplateContext = {}
 ): Promise<string | null> {
-    if (!typeValue) return null;
+    if (!noteTypeValue) return null;
 
     for (const [pattern, template] of pathMappings) {
-        const match = typeValue.match(new RegExp(pattern));
+        const match = noteTypeValue.match(new RegExp(pattern));
         if (match) {
             const withGroups = template.replace(/\$(\d+)/g, (_, n) => match[parseInt(n)] || "");
             return expandTemplate(withGroups, ctx);
@@ -121,16 +121,16 @@ export function extractDatePrefix(basename: string): string | null {
 }
 
 /**
- * Get filename template based on content-type and filename mappings.
+ * Get filename template based on note type and filename mappings.
  * Falls back to the default date+title pattern.
  */
 export function getFilenamePattern(
-    typeValue: string | null | undefined,
+    noteTypeValue: string | null | undefined,
     filenameMappings: [string, string][]
 ): string {
-    if (typeValue) {
+    if (noteTypeValue) {
         for (const [pattern, template] of filenameMappings) {
-            if (typeValue.match(new RegExp(pattern))) return template;
+            if (noteTypeValue.match(new RegExp(pattern))) return template;
         }
     }
     return "{{ date }}--{{ title }}";
@@ -164,18 +164,18 @@ export async function buildFilenameFromPattern(
 // ─── Public entry point ───────────────────────────────────────────────────────
 
 /**
- * Compute full file path info for a new or existing workflow object.
+ * Compute full file path info for a new or existing typed note.
  *
  * @param settings             Plugin settings
- * @param typeValue            Content-type frontmatter value
+ * @param noteTypeValue        Note type frontmatter value
  * @param title                Note title
  * @param existingDatePrefix   Date prefix extracted from the existing filename (reshelve)
  * @param ctime                File creation timestamp in ms (reshelve fallback)
  * @param frontmatter          Full frontmatter record — all fields available in templates
  */
 export async function computeFilePath(
-    settings: WorkflowObjectsSettings,
-    typeValue: string | null | undefined,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeValue: string | null | undefined,
     title: string | null | undefined,
     existingDatePrefix?: string | null,
     ctime?: number,
@@ -187,7 +187,7 @@ export async function computeFilePath(
     const ctx: TemplateContext = { ...frontmatter };
     if (title != null) ctx["title"] = title;
 
-    const folder = overrides.folder ?? (await getDestinationFolder(typeValue, settings.pathMappings, ctx)) ?? "";
+    const folder = overrides.folder ?? (await getDestinationFolder(noteTypeValue, settings.pathMappings, ctx)) ?? "";
 
     const datePrefix =
         existingDatePrefix ||
@@ -195,7 +195,7 @@ export async function computeFilePath(
         generateDatePrefix();
 
     const basename = overrides.basename ?? await buildFilenameFromPattern(
-        getFilenamePattern(typeValue, settings.filenameMappings),
+        getFilenamePattern(noteTypeValue, settings.filenameMappings),
         ctx,
         datePrefix,
         settings.maxTitleLength
@@ -210,8 +210,8 @@ export async function computeFilePath(
 /** Compute an existing note's path, independently applying rename and folder rules. */
 export async function computeExistingFilePath(
     file: TFile,
-    settings: WorkflowObjectsSettings,
-    typeField: string,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeField: string,
     frontmatter: Record<string, unknown>,
     autoRename: boolean = true,
     autoReshelve: boolean = true
@@ -219,7 +219,7 @@ export async function computeExistingFilePath(
     const frontmatterDate = resolveDateFromFrontmatter(frontmatter, settings.titlePrefixDateProperties);
     return computeFilePath(
         settings,
-        frontmatter[typeField] as string | undefined,
+        frontmatter[noteTypeField] as string | undefined,
         frontmatter[settings.fields.title] as string | undefined,
         frontmatterDate !== null ? null : extractDatePrefix(file.basename),
         frontmatterDate ?? file.stat.ctime,

@@ -170,7 +170,7 @@ export type SortMode = "schema" | "alphabetical" | "none";
  * Sort an array of key-value entries according to the specified mode
  * @param entries Array of [key, value] tuples
  * @param fieldOrder Schema field order (only used when mode is "schema")
- * @param mode Sort mode: "schema" for type definition order, "alphabetical" for A-Z, "none" for no sorting
+ * @param mode Sort mode: "schema" for note type definition order, "alphabetical" for A-Z, "none" for no sorting
  */
 export function sortEntries(
     entries: [string, unknown][],
@@ -205,7 +205,7 @@ export function sortEntries(
 /**
  * Get default value for a Metadata Menu field type
  */
-export function getDefaultValueForType(
+export function getDefaultValueForFieldType(
     fieldType: string,
     options: Record<string, unknown> = {},
     dateFormat: string = "YYYY-MM-DDTHH:mm"

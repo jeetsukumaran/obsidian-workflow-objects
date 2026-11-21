@@ -1,11 +1,11 @@
 import { App, Modal, Setting, TFolder } from "obsidian";
-import { WorkflowObjectsSettings } from "../types";
+import { TypedNoteWorkflowsSettings } from "../types";
 
 /**
- * Options collected from the bulk-assign-type configuration modal
+ * Options collected from the bulk-assign-note-type configuration modal
  */
-export interface BulkAssignTypeOptions {
-    /** The type name to write into the type field of every matched file */
+export interface BulkAssignNoteTypeOptions {
+    /** The note type name to write into the note type field of every matched file */
     targetType: string;
     /** Vault-relative directory to operate on ("" = root) */
     directory: string;
@@ -15,44 +15,44 @@ export interface BulkAssignTypeOptions {
     includePattern: string;
     /** Optional regex that file paths must NOT match (empty = none excluded) */
     excludePattern: string;
-    /** Run clean-frontmatter after assigning the type */
+    /** Run clean-frontmatter after assigning the note type */
     runClean: boolean;
     /** Clean mode */
     cleanMode: "standard" | "strict";
-    /** Run sort-frontmatter after assigning (and optionally cleaning) the type */
+    /** Run sort-frontmatter after assigning (and optionally cleaning) the note type */
     runSort: boolean;
     /** Sort mode */
     sortMode: "schema" | "alphabetical";
-    /** Move / rename files to match their new type and title after assigning */
+    /** Move / rename files to match their new note type and title after assigning */
     runReshelve: boolean;
 }
 
 /**
- * Configuration modal for the "Bulk assign object type" command.
+ * Configuration modal for the "Bulk assign note type" command.
  *
- * Collects the target type, file scope / filters, and optional post-assign
+ * Collects the target note type, file scope / filters, and optional post-assign
  * operations (clean, sort).  Reshelve is intentionally excluded — path
  * changes are a distinct, more destructive operation that the user should
- * trigger separately after reviewing the new type assignments.
+ * trigger separately after reviewing the new note type assignments.
  *
- * On confirm the modal resolves with a {@link BulkAssignTypeOptions} via
+ * On confirm the modal resolves with a {@link BulkAssignNoteTypeOptions} via
  * `openAndGetValue()`; on cancel it resolves with null.
  */
-export class BulkAssignTypeModal extends Modal {
-    private options: BulkAssignTypeOptions;
-    private onSubmit: ((opts: BulkAssignTypeOptions | null) => void) | null = null;
+export class BulkAssignNoteTypeModal extends Modal {
+    private options: BulkAssignNoteTypeOptions;
+    private onSubmit: ((opts: BulkAssignNoteTypeOptions | null) => void) | null = null;
     private submitted = false;
     private errorEl: HTMLElement | null = null;
 
     constructor(
         app: App,
-        private settings: WorkflowObjectsSettings,
-        private typeNames: string[],
-        defaults?: Partial<BulkAssignTypeOptions>
+        private settings: TypedNoteWorkflowsSettings,
+        private noteTypeNames: string[],
+        defaults?: Partial<BulkAssignNoteTypeOptions>
     ) {
         super(app);
         this.options = {
-            targetType: typeNames[0] ?? "",
+            targetType: noteTypeNames[0] ?? "",
             directory: "",
             recursive: true,
             includePattern: "",
@@ -69,19 +69,19 @@ export class BulkAssignTypeModal extends Modal {
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl("h2", { text: "Bulk assign object type" });
+        contentEl.createEl("h2", { text: "Bulk assign note type" });
 
-        // ── Type ─────────────────────────────────────────────────────────────
+        // ── Note type ─────────────────────────────────────────────────────────────
 
-        contentEl.createEl("h3", { text: "Type to assign" });
+        contentEl.createEl("h3", { text: "Note type to assign" });
 
         new Setting(contentEl)
-            .setName("Object type")
+            .setName("Note type")
             .setDesc(
-                "The type value that will be written into the type field of every matched file."
+                "The note type value that will be written into the note type field of every matched file."
             )
             .addDropdown((dd) => {
-                for (const name of this.typeNames) {
+                for (const name of this.noteTypeNames) {
                     dd.addOption(name, name);
                 }
                 dd.setValue(this.options.targetType).onChange((v) => {
@@ -103,7 +103,7 @@ export class BulkAssignTypeModal extends Modal {
                 text.setPlaceholder("(root)").setValue(this.options.directory);
 
                 // Datalist for folder autocomplete
-                const listId = "wfo-bulk-folder-list";
+                const listId = "tnw-bulk-folder-list";
                 const datalist = text.inputEl.createEl(
                     "datalist" as keyof HTMLElementTagNameMap
                 );
@@ -172,7 +172,7 @@ export class BulkAssignTypeModal extends Modal {
         new Setting(contentEl)
             .setName("Clean frontmatter")
             .setDesc(
-                "Remove empty / undefined fields and add missing schema fields after assigning the type"
+                "Remove empty / undefined fields and add missing schema fields after assigning the note type"
             )
             .addToggle((toggle) =>
                 toggle
@@ -203,7 +203,7 @@ export class BulkAssignTypeModal extends Modal {
         let sortModeRow: Setting;
         new Setting(contentEl)
             .setName("Sort frontmatter")
-            .setDesc("Reorder frontmatter fields after assigning the type")
+            .setDesc("Reorder frontmatter fields after assigning the note type")
             .addToggle((toggle) =>
                 toggle
                     .setValue(this.options.runSort)
@@ -230,7 +230,7 @@ export class BulkAssignTypeModal extends Modal {
         new Setting(contentEl)
             .setName("Reshelve files")
             .setDesc(
-                "Move / rename each file to match its new type and title after assigning"
+                "Move / rename each file to match its new note type and title after assigning"
             )
             .addToggle((toggle) =>
                 toggle
@@ -242,7 +242,7 @@ export class BulkAssignTypeModal extends Modal {
 
         // ── Actions ───────────────────────────────────────────────────────────
 
-        this.errorEl = contentEl.createEl("p", { cls: "mod-warning wfo-hidden" });
+        this.errorEl = contentEl.createEl("p", { cls: "mod-warning tnw-hidden" });
 
         new Setting(contentEl)
             .addButton((btn) =>
@@ -251,7 +251,7 @@ export class BulkAssignTypeModal extends Modal {
                     .setCta()
                     .onClick(() => {
                         if (!this.options.targetType) {
-                            this.showError("Please select an object type.");
+                            this.showError("Please select a note type.");
                             return;
                         }
                         this.submitted = true;
@@ -273,7 +273,7 @@ export class BulkAssignTypeModal extends Modal {
         }
     }
 
-    openAndGetValue(): Promise<BulkAssignTypeOptions | null> {
+    openAndGetValue(): Promise<BulkAssignNoteTypeOptions | null> {
         return new Promise((resolve) => {
             this.onSubmit = resolve;
             this.open();
@@ -285,9 +285,9 @@ export class BulkAssignTypeModal extends Modal {
     private showError(msg: string): void {
         if (!this.errorEl) return;
         this.errorEl.textContent = msg;
-        this.errorEl.removeClass("wfo-hidden");
+        this.errorEl.removeClass("tnw-hidden");
         window.setTimeout(() => {
-            if (this.errorEl) this.errorEl.addClass("wfo-hidden");
+            if (this.errorEl) this.errorEl.addClass("tnw-hidden");
         }, 3000);
     }
 

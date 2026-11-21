@@ -21,7 +21,7 @@ async function open(options = {}) {
         options: { updateFileLocation: false, removeFields: "never", ...options.options }, ...options });
     const first = env.open();
     first.click("Review fields");
-    await until(() => env.modals.at(-1) instanceof env.classes.ObjectFieldsModal || env.errors.length);
+    await until(() => env.modals.at(-1) instanceof env.classes.TypedNoteFieldsModal || env.errors.length);
     assert.deepEqual(env.errors, []);
     const modal = env.modals.at(-1);
     await until(() => modal.previewEl.text);
@@ -30,7 +30,7 @@ async function open(options = {}) {
     return { env, modal, completion: first.completion };
 }
 async function save(modal) {
-    click(modal, "Assign type");
+    click(modal, "Assign note type");
     await until(() => !modal.saving);
 }
 

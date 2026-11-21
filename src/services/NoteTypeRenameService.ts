@@ -1,9 +1,9 @@
 import { App, TFile, TFolder } from "obsidian";
-import { WorkflowObjectsSettings } from "../types";
+import { TypedNoteWorkflowsSettings } from "../types";
 import { stringList } from "../schema/definitions";
 import { ensureFolderExists } from "../utils/pathUtils";
 import { FrontmatterService } from "./FrontmatterService";
-import { TypeService, SchemaPlugin } from "./TypeService";
+import { NoteTypeService, SchemaPlugin } from "./NoteTypeService";
 
 interface FileEdit {
     file: TFile;
@@ -21,18 +21,18 @@ interface SettingsEdit {
     changes: SettingChange[];
     save: () => Promise<void>;
 }
-export interface TypeRenameResult { filesUpdated: number }
+export interface NoteTypeRenameResult { filesUpdated: number }
 
 const running = new WeakSet<App>();
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 /** Rename class identity and its declared references as one recoverable operation. */
-export class TypeRenameService {
+export class NoteTypeRenameService {
     constructor(
         private app: App,
-        private settings: WorkflowObjectsSettings,
-        private types: TypeService,
+        private settings: TypedNoteWorkflowsSettings,
+        private noteTypes: NoteTypeService,
         private metadata: FrontmatterService,
         private saveSettings: () => Promise<void>,
     ) {}
@@ -40,17 +40,17 @@ export class TypeRenameService {
     /** Shared by live dialog validation and the final write. Names are schema-relative. */
     validateName(oldName: string, input: string): string | null {
         const name = input.trim();
-        if (!name) return "Enter a new type name.";
-        if (name.toLowerCase() === oldName.toLowerCase()) return "Choose a different type name.";
-        if (name.toLowerCase().endsWith(".md")) return "Enter the type name without .md.";
+        if (!name) return "Enter a new note type name.";
+        if (name.toLowerCase() === oldName.toLowerCase()) return "Choose a different note type name.";
+        if (name.toLowerCase().endsWith(".md")) return "Enter the note type name without .md.";
         if (/[\\:*?"<>|#[\],]/.test(name) || [...name].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || name.split("/").some(part =>
             !part || part.startsWith(".") || part !== part.trim() || part.endsWith(".") ||
             /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) {
-            return "Use a valid type name or subfolder/name within the types folder.";
+            return "Use a valid note type name or subfolder/name within the note types folder.";
         }
-        const path = `${this.types.getTypesPath()}/${name}.md`;
+        const path = `${this.noteTypes.getNoteTypesPath()}/${name}.md`;
         if (this.app.vault.getAbstractFileByPath(path) || this.app.vault.getFiles().some(file =>
-            file.path.toLowerCase() === path.toLowerCase())) return `A file or type named "${name}" already exists.`;
+            file.path.toLowerCase() === path.toLowerCase())) return `A file or note type named "${name}" already exists.`;
         const parts = path.split("/");
         for (let i = 1; i < parts.length; i++) {
             const parent = this.app.vault.getAbstractFileByPath(parts.slice(0, i).join("/"));
@@ -59,23 +59,23 @@ export class TypeRenameService {
         return null;
     }
 
-    async rename(oldName: string, input: string): Promise<TypeRenameResult> {
-        if (running.has(this.app)) throw new Error("A type rename is already running.");
+    async rename(oldName: string, input: string): Promise<NoteTypeRenameResult> {
+        if (running.has(this.app)) throw new Error("A note type rename is already running.");
         running.add(this.app);
         try { return await this.performRename(oldName, input.trim()); }
         finally { running.delete(this.app); }
     }
 
-    private async performRename(oldName: string, newName: string): Promise<TypeRenameResult> {
+    private async performRename(oldName: string, newName: string): Promise<NoteTypeRenameResult> {
         const invalid = this.validateName(oldName, newName);
         if (invalid) throw new Error(invalid);
-        const definition = this.types.getTypeFile(oldName);
-        if (!definition) throw new Error(`Type no longer exists: ${oldName}`);
-        const provider = this.types.getSchemaProviderForEdits();
+        const definition = this.noteTypes.getNoteTypeFile(oldName);
+        if (!definition) throw new Error(`Note type no longer exists: ${oldName}`);
+        const provider = this.noteTypes.getSchemaProviderForEdits();
         const context = this.context();
         const sourcePath = definition.path;
-        const destination = `${this.types.getTypesPath()}/${newName}.md`;
-        const keys = new Set([this.types.getTypeFieldName()]);
+        const destination = `${this.noteTypes.getNoteTypesPath()}/${newName}.md`;
+        const keys = new Set([this.noteTypes.getNoteTypeFieldName()]);
         const alias = provider?.settings?.fileClassAlias;
         if (provider) keys.add(typeof alias === "string" && alias ? alias : "fileClass");
         const edits: FileEdit[] = [];
@@ -88,20 +88,20 @@ export class TypeRenameService {
                 const mapped = typeof before.mapWithTag === "string" ? before.mapWithTag.toLowerCase() === "true" : !!before.mapWithTag;
                 if (mapped) after.tagNames = [...new Set([...stringList(before.tagNames), oldName])];
                 // Keep an existing generated view reachable when its name was implicit.
-                if (provider && this.types.getSource() === "fileclass" && before.baseFile && !before.baseView) after.baseView = oldName;
+                if (provider && this.noteTypes.getSource() === "fileclass" && before.baseFile && !before.baseView) after.baseView = oldName;
             }
             if (!same(before, after)) edits.push({ file, path: file.path, before, after });
         }
         const settingsEdits = this.settingsEdits(provider, oldName, newName);
         const assertContext = () => {
-            if (context !== this.context() || provider !== this.types.getSchemaProviderForEdits()) {
-                throw new Error("Schema source, folder, or type field changed during rename. Run the command again.");
+            if (context !== this.context() || provider !== this.noteTypes.getSchemaProviderForEdits()) {
+                throw new Error("Schema source, folder, or note type field changed during rename. Run the command again.");
             }
         };
         assertContext();
         const collision = this.validateName(oldName, newName);
         if (collision) throw new Error(collision);
-        if (definition.path !== sourcePath || this.types.getTypeFile(oldName) !== definition) throw new Error("The type definition moved during rename.");
+        if (definition.path !== sourcePath || this.noteTypes.getNoteTypeFile(oldName) !== definition) throw new Error("The note type definition moved during rename.");
 
         const completed: FileEdit[] = [];
         const saved: SettingsEdit[] = [];
@@ -111,7 +111,7 @@ export class TypeRenameService {
             assertContext();
             const occupied = this.validateName(oldName, newName);
             if (occupied) throw new Error(occupied);
-            if (definition.path !== sourcePath || this.types.getTypeFile(oldName) !== definition) throw new Error("The type definition moved during rename.");
+            if (definition.path !== sourcePath || this.noteTypes.getNoteTypeFile(oldName) !== definition) throw new Error("The note type definition moved during rename.");
             await this.app.fileManager.renameFile(definition, destination);
             moved = true;
             for (const edit of edits) {
@@ -125,16 +125,16 @@ export class TypeRenameService {
                 saved.push(edit); // Saving can fail after changing the in-memory settings.
                 await edit.save();
             }
-            // A note created or edited during the scan must not silently retain the old type.
+            // A note created or edited during the scan must not silently retain the old note type.
             assertContext();
             for (const file of this.app.vault.getMarkdownFiles()) {
                 const current = await this.read(file);
                 if (!same(current, this.renameDeclarations(file, current, keys, oldName, newName))) {
-                    throw new Error(`An old type declaration appeared during rename: ${file.path}`);
+                    throw new Error(`An old note type declaration appeared during rename: ${file.path}`);
                 }
             }
             if (definition.path !== destination || this.app.vault.getAbstractFileByPath(destination) !== definition) {
-                throw new Error("The renamed type definition moved or was deleted during the operation.");
+                throw new Error("The renamed note type definition moved or was deleted during the operation.");
             }
             return { filesUpdated: edits.length };
         } catch (error) {
@@ -158,8 +158,8 @@ export class TypeRenameService {
     }
 
     private context(): string {
-        return JSON.stringify([this.types.getSource(), this.types.getTypesPath(), this.types.getTypeFieldName(),
-            this.types.getSchemaProviderForEdits()?.settings?.fileClassAlias]);
+        return JSON.stringify([this.noteTypes.getSource(), this.noteTypes.getNoteTypesPath(), this.noteTypes.getNoteTypeFieldName(),
+            this.noteTypes.getSchemaProviderForEdits()?.settings?.fileClassAlias]);
     }
 
     private async read(file: TFile): Promise<Record<string, unknown>> {
@@ -172,9 +172,9 @@ export class TypeRenameService {
         for (const key of keys) {
             if (Object.prototype.hasOwnProperty.call(fm, key)) result[key] = renameReference(fm[key], oldName, newName);
         }
-        if (this.types.isTypeDefinitionFile(file) && typeof fm.extends === "string" && fm.extends.trim() === oldName) result.extends = newName;
+        if (this.noteTypes.isNoteTypeDefinitionFile(file) && typeof fm.extends === "string" && fm.extends.trim() === oldName) result.extends = newName;
         // Metadata Menu saved views explicitly name the child classes they include.
-        if (this.types.isTypeDefinitionFile(file) && Array.isArray(fm.savedViews)) {
+        if (this.noteTypes.isNoteTypeDefinitionFile(file) && Array.isArray(fm.savedViews)) {
             result.savedViews = fm.savedViews.map((view: unknown) => {
                 if (!view || typeof view !== "object" || Array.isArray(view)) return view;
                 const saved = view as Record<string, unknown>;
@@ -205,7 +205,7 @@ export class TypeRenameService {
         if (provider?.settings) {
             const changes: SettingChange[] = [];
             if (provider.settings.globalFileClass === oldName) add(changes, provider.settings, "globalFileClass", newName);
-            if (this.types.getSource() === "metadata-menu") {
+            if (this.noteTypes.getSource() === "metadata-menu") {
                 for (const queries of [provider.settings.fileClassQueries, provider.initialFileClassQueries]) {
                     if (!Array.isArray(queries)) continue;
                     for (const query of queries) {
@@ -214,7 +214,7 @@ export class TypeRenameService {
                 }
             }
             if (changes.length) {
-                if (!provider.saveSettings) throw new Error("The schema integration cannot save its type references. Rename cancelled.");
+                if (!provider.saveSettings) throw new Error("The schema integration cannot save its note type references. Rename cancelled.");
                 edits.push({ changes, save: () => provider.saveSettings!() });
             }
         }

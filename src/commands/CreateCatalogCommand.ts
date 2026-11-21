@@ -1,6 +1,6 @@
 import { App, Modal, Notice, Setting, TFile } from "obsidian";
-import { WorkflowObjectsSettings, FieldDefinition, CatalogTimestampField } from "../types";
-import { TypeService } from "../services/TypeService";
+import { TypedNoteWorkflowsSettings, FieldDefinition, CatalogTimestampField } from "../types";
+import { NoteTypeService } from "../services/NoteTypeService";
 import { ensureFolderExists, liquidEngine } from "../utils/pathUtils";
 import { openFile } from "../utils/helpers";
 
@@ -20,11 +20,11 @@ function toFormulaKey(fieldName: string): string {
 
 /**
  * Expand a catalog template string using LiquidJS.
- * The variable `content-type` is set to the selected type name.
+ * The variable `content-type` is set to the selected note type name.
  * Example: `{{ content-type }}.base` → `article.base`
  */
-async function expandCatalogTemplate(template: string, typeName: string): Promise<string> {
-    const result: string = await liquidEngine.parseAndRender(template, { "content-type": typeName });
+async function expandCatalogTemplate(template: string, noteTypeName: string): Promise<string> {
+    const result: string = await liquidEngine.parseAndRender(template, { "content-type": noteTypeName });
     return result;
 }
 
@@ -32,18 +32,18 @@ async function expandCatalogTemplate(template: string, typeName: string): Promis
 
 /**
  * Build the YAML content for a Bases (.base) file that queries all notes of a
- * given workflow-object type.
+ * given note type.
  *
  * Column rules:
  *  - First column: formula link → file.asLink(note["title"] || file.name)
  *  - MM "File"/"MultiFile" fields: formula link to linked file's title
  *  - All other schema fields: raw note property with sentence-case display name
  *  - Last two columns: file.ctime ("Date created"), file.mtime ("Date modified")
- *  - The type-discriminator field itself is excluded (it's the filter criterion)
+ *  - The note type discriminator field itself is excluded (it's the filter criterion)
  */
 function generateBaseContent(
-    typeFieldName: string,
-    selectedType: string,
+    noteTypeFieldName: string,
+    selectedNoteType: string,
     fields: FieldDefinition[],
     titleFieldName: string,
     remapDisplayNames: boolean,
@@ -68,8 +68,8 @@ function generateBaseContent(
     // ── Pass 2: remaining schema fields → order + formula/property entries ────
     for (const field of fields) {
         const name = field.name;
-        // Title shown via formula above; typeField is the filter criterion.
-        if (!name || name === titleFieldName || name === typeFieldName) continue;
+        // Title shown via formula above; noteTypeField is the filter criterion.
+        if (!name || name === titleFieldName || name === noteTypeFieldName) continue;
 
         if (field.type === "File") {
             // Single linked-file: formula rendering the linked file as a titled link.
@@ -113,7 +113,7 @@ function generateBaseContent(
     // ── Assemble YAML ─────────────────────────────────────────────────────────
     const parts: string[] = [];
 
-    parts.push(`filters: 'note["${typeFieldName}"] == "${selectedType}"'`);
+    parts.push(`filters: 'note["${noteTypeFieldName}"] == "${selectedNoteType}"'`);
     parts.push("");
 
     if (formulaLines.length > 0) {
@@ -130,7 +130,7 @@ function generateBaseContent(
 
     parts.push("views:");
     parts.push("  - type: table");
-    parts.push(`    name: "${toSentenceCase(selectedType)} catalog"`);
+    parts.push(`    name: "${toSentenceCase(selectedNoteType)} catalog"`);
     parts.push("    order:");
     parts.push(orderItems.join("\n"));
 
@@ -140,7 +140,7 @@ function generateBaseContent(
 // ─── Dialog modal ─────────────────────────────────────────────────────────────
 
 interface CatalogOptions {
-    selectedType: string;
+    selectedNoteType: string;
     dir: string;
     filename: string;
     remapDisplayNames: boolean;
@@ -153,40 +153,40 @@ interface CatalogOptions {
  * the .base file is created.
  *
  * Displays:
- *   1. Type selector (pre-selected to the type chosen in the suggester, but
+ *   1. Note type selector (pre-selected to the note type chosen in the suggester, but
  *      changeable in case the user changes their mind)
  *   2. Destination directory (editable, pre-filled from settings template)
  *   3. Filename (editable, pre-filled from settings template)
  */
 class CreateCatalogModal extends Modal {
-    private typeNames: string[];
+    private noteTypeNames: string[];
     private options: CatalogOptions;
     private onSubmit: ((opts: CatalogOptions | null) => void) | null = null;
 
     constructor(
         app: App,
-        typeNames: string[],
+        noteTypeNames: string[],
         defaultOptions: CatalogOptions
     ) {
         super(app);
-        this.typeNames = typeNames;
+        this.noteTypeNames = noteTypeNames;
         this.options = { ...defaultOptions };
     }
 
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl("h3", { text: "Create new workflow object catalog" });
+        contentEl.createEl("h3", { text: "Create typed note catalog" });
 
-        // ── Type selector ──────────────────────────────────────────────────
+        // ── Note type selector ──────────────────────────────────────────────────
         new Setting(contentEl)
-            .setName("Object type")
-            .setDesc("The workflow object type this catalog will query.")
+            .setName("Note type")
+            .setDesc("The note type this catalog will query.")
             .addDropdown((dd) => {
-                for (const t of this.typeNames) dd.addOption(t, t);
-                dd.setValue(this.options.selectedType);
+                for (const t of this.noteTypeNames) dd.addOption(t, t);
+                dd.setValue(this.options.selectedNoteType);
                 dd.onChange((value) => {
-                    this.options.selectedType = value;
+                    this.options.selectedNoteType = value;
                     // Simplest approach: leave dir/filename as-is; user can edit manually.
                 });
             });
@@ -453,40 +453,40 @@ async function resolvePathWithCollision(
 // ─── Command entry point ───────────────────────────────────────────────────────
 
 /**
- * "Create new workflow object catalog" command.
+ * "Create typed note catalog" command.
  *
  * Flow:
- *  1. Show type suggester → user picks a type
- *  2. Show options dialog (type re-selectable, dir + filename pre-filled)
+ *  1. Show note type suggester → user picks a note type
+ *  2. Show options dialog (note type re-selectable, dir + filename pre-filled)
  *  3. Generate schema-aware .base file and open it
  */
-export async function createWorkflowObjectCatalog(
+export async function createTypedNoteCatalog(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService
 ): Promise<void> {
     try {
-        // 1. Fetch available types
-        const typeNames = typeService.getTypeNames();
-        if (!typeNames) return;
+        // 1. Fetch available note types
+        const noteTypeNames = noteTypeService.getAvailableNoteTypeNames();
+        if (!noteTypeNames) return;
 
-        // 2. Type suggester (first prompt)
+        // 2. Note type suggester (first prompt)
         const { StringSuggesterModal } = await import("../modals");
         const suggester = new StringSuggesterModal(
             app,
-            typeNames,
-            "Create new catalog for object of type"
+            noteTypeNames,
+            "Create typed note catalog — choose note type"
         );
-        const selectedType = await suggester.openAndGetValue();
-        if (!selectedType) return;
+        const selectedNoteType = await suggester.openAndGetValue();
+        if (!selectedNoteType) return;
 
         // 3. Compute default dir / filename by expanding {{ content-type }}
-        const defaultDir = await expandCatalogTemplate(settings.catalogDir, selectedType);
-        const defaultFilename = await expandCatalogTemplate(settings.catalogFilename, selectedType);
+        const defaultDir = await expandCatalogTemplate(settings.catalogDir, selectedNoteType);
+        const defaultFilename = await expandCatalogTemplate(settings.catalogFilename, selectedNoteType);
 
-        // 4. Options dialog (type pre-selected, dir + filename editable)
-        const modal = new CreateCatalogModal(app, typeNames, {
-            selectedType,
+        // 4. Options dialog (note type pre-selected, dir + filename editable)
+        const modal = new CreateCatalogModal(app, noteTypeNames, {
+            selectedNoteType,
             dir: defaultDir,
             filename: defaultFilename,
             remapDisplayNames: settings.catalogRemapDisplayNames,
@@ -497,7 +497,7 @@ export async function createWorkflowObjectCatalog(
         if (!opts) return;
 
         // 5. Normalise filename, resolve dir, handle collisions
-        let filename = opts.filename || `catalog.${opts.selectedType}.base`;
+        let filename = opts.filename || `catalog.${opts.selectedNoteType}.base`;
         if (!filename.endsWith(".base")) filename += ".base";
 
         const dir = opts.dir.replace(/\/+$/, ""); // strip trailing slashes
@@ -508,13 +508,13 @@ export async function createWorkflowObjectCatalog(
         const { fullPath, replace } = resolved;
 
         // Use the same inherited root fields and order as metadata operations.
-        const orderedFields = (await typeService.getTypeFieldInfo(opts.selectedType))?.fields ?? [];
+        const orderedFields = (await noteTypeService.getNoteTypeFieldInfo(opts.selectedNoteType))?.fields ?? [];
 
         // 7. Generate .base content
-        const typeFieldName = typeService.getTypeFieldName();
+        const noteTypeFieldName = noteTypeService.getNoteTypeFieldName();
         const content = generateBaseContent(
-            typeFieldName,
-            opts.selectedType,
+            noteTypeFieldName,
+            opts.selectedNoteType,
             orderedFields,
             settings.fields.title,
             opts.remapDisplayNames,
@@ -539,7 +539,7 @@ export async function createWorkflowObjectCatalog(
         await openFile(app, file);
         new Notice(`${replace ? "Replaced" : "Created"} catalog: ${fullPath}`);
     } catch (error) {
-        console.error("Workflow Objects: Error creating catalog", error);
+        console.error("Typed Note Workflows: Error creating catalog", error);
         new Notice(`Error creating catalog: ${error instanceof Error ? error.message : String(error)}`);
     }
 }

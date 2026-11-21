@@ -1,6 +1,6 @@
 import { App, Notice, TFile } from "obsidian";
-import { WorkflowObjectsSettings, FieldDefinition } from "../types";
-import { TypeService } from "../services/TypeService";
+import { TypedNoteWorkflowsSettings, FieldDefinition } from "../types";
+import { NoteTypeService } from "../services/NoteTypeService";
 import { StringSuggesterModal } from "../modals/SuggesterModal";
 import { CopyFieldsFromModal } from "../modals/CopyFieldsFromModal";
 
@@ -8,13 +8,13 @@ import { CopyFieldsFromModal } from "../modals/CopyFieldsFromModal";
  * "Copy fields from…" command.
  *
  * Entry points:
- *  - Command palette: uses the active file as the target (must be a type
- *    definition file in the types folder).
+ *  - Command palette: uses the active file as the target (must be a note type
+ *    definition file in the note types folder).
  *  - File-explorer context menu: `targetFile` is passed directly.
  *
  * Flow:
- *  1. Validate the target file is a type definition.
- *  2. Suggest-modal: pick a source type (any type except the target itself).
+ *  1. Validate the target file is a note type definition.
+ *  2. Suggest-modal: pick a source note type (any note type except the target itself).
  *  3. CopyFieldsFromModal: select / rename / reorder fields; pre-existing
  *     fields in the target default to unchecked.
  *  4. Merge selected fields into the target's frontmatter via
@@ -25,8 +25,8 @@ import { CopyFieldsFromModal } from "../modals/CopyFieldsFromModal";
  */
 export async function copyFieldsFrom(
     app: App,
-    _settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    _settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     targetFile?: TFile
 ): Promise<void> {
     try {
@@ -34,31 +34,31 @@ export async function copyFieldsFrom(
         const target = targetFile ?? app.workspace.getActiveFile();
 
         if (!target) {
-            new Notice("No active file — open a type definition file first.");
+            new Notice("No active file — open a note type definition file first.");
             return;
         }
 
-        if (!typeService.isTypeDefinitionFile(target)) {
+        if (!noteTypeService.isNoteTypeDefinitionFile(target)) {
             new Notice(
-                `"${target.basename}" is not a type definition file.\n` +
-                `Open (or right-click) a file in the types folder.`
+                `"${target.basename}" is not a note type definition file.\n` +
+                `Open (or right-click) a file in the note types folder.`
             );
             return;
         }
 
         const targetName = target.basename;
 
-        // ── Step 2: source type suggester ──────────────────────────────────
-        const allTypeNames = typeService.getTypeNames();
-        if (!allTypeNames || allTypeNames.length === 0) return;
+        // ── Step 2: source note type suggester ──────────────────────────────────
+        const allNoteTypeNames = noteTypeService.getAvailableNoteTypeNames();
+        if (!allNoteTypeNames || allNoteTypeNames.length === 0) return;
 
-        // Exclude the target itself — copying a type onto itself is a no-op.
-        const sourceChoices = allTypeNames.filter(
+        // Exclude the target itself — copying a note type onto itself is a no-op.
+        const sourceChoices = allNoteTypeNames.filter(
             (n) => n.toLowerCase() !== targetName.toLowerCase()
         );
 
         if (sourceChoices.length === 0) {
-            new Notice("No other type definitions found to copy from.");
+            new Notice("No other note type definitions found to copy from.");
             return;
         }
 
@@ -71,13 +71,13 @@ export async function copyFieldsFrom(
         if (!sourceName) return;
 
         // ── Step 3: read source and target field definitions ───────────────
-        const sourceFields = typeService.getTypeFieldDefinitions(sourceName);
+        const sourceFields = noteTypeService.getNoteTypeFieldDefinitions(sourceName);
         if (!sourceFields || sourceFields.length === 0) {
             new Notice(`"${sourceName}" has no field definitions to copy.`);
             return;
         }
 
-        const targetFields = typeService.getTypeFieldDefinitions(targetName) ?? [];
+        const targetFields = noteTypeService.getNoteTypeFieldDefinitions(targetName) ?? [];
         const targetFieldNames = new Set(targetFields.map((f) => f.name));
 
         // ── Step 4: show copy modal ────────────────────────────────────────
@@ -93,7 +93,7 @@ export async function copyFieldsFrom(
 
         // ── Step 5: merge into target frontmatter ──────────────────────────
         //
-        // Read the raw frontmatter of the target type-definition file so we
+        // Read the raw frontmatter of the target note type definition file so we
         // can splice in the new field definitions.  We access it through
         // processFrontMatter — no raw file read needed.
         //
@@ -168,7 +168,7 @@ export async function copyFieldsFrom(
             `(${parts.join(", ")})`
         );
     } catch (error) {
-        console.error("Workflow Objects: Error copying fields", error);
+        console.error("Typed Note Workflows: Error copying fields", error);
         new Notice(
             `Error copying fields: ${error instanceof Error ? error.message : String(error)}`
         );

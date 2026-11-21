@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import WorkflowObjectsPlugin from "./main";
+import TypedNoteWorkflowsPlugin from "./main";
 import { DEFAULT_SETTINGS } from "./types";
 
 // ─── Shared template syntax description ───────────────────────────────────────
@@ -21,10 +21,10 @@ const TEMPLATE_SYNTAX = [
 
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
-export class WorkflowObjectsSettingTab extends PluginSettingTab {
-    plugin: WorkflowObjectsPlugin;
+export class TypedNoteWorkflowsSettingTab extends PluginSettingTab {
+    plugin: TypedNoteWorkflowsPlugin;
 
-    constructor(app: App, plugin: WorkflowObjectsPlugin) {
+    constructor(app: App, plugin: TypedNoteWorkflowsPlugin) {
         super(app, plugin);
         this.plugin = plugin;
     }
@@ -33,8 +33,8 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        // ── Type Definitions ──────────────────────────────────────────────────
-        new Setting(containerEl).setName("Type definitions").setHeading();
+        // ── Note type definitions ──────────────────────────────────────────────────
+        new Setting(containerEl).setName("Note type definitions").setHeading();
 
         new Setting(containerEl)
             .setName("Schema source")
@@ -55,11 +55,11 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 }));
 
         new Setting(containerEl)
-            .setName("Types path")
+            .setName("Note types path")
             .setDesc(
-                "Vault path to a folder of type-definition notes. " +
-                "Each note's filename becomes a type name and its frontmatter fields " +
-                "define the schema for workflow objects of that type. " +
+                "Vault path to a folder of note type definition notes. " +
+                "Each note's filename becomes a note type name and its frontmatter fields " +
+                "define the schema for notes of that type. " +
                 "Leave empty to read from the selected schema integration."
             )
             .addText((text) =>
@@ -73,9 +73,9 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName("Fallback types path")
+            .setName("Fallback note types path")
             .setDesc(
-                "Folder used for standalone schemas when no types path is set. " +
+                "Folder used for standalone schemas when no note types path is set. " +
                 "Defaults to '" + DEFAULT_SETTINGS.typesPathFallback + "'."
             )
             .addText((text) =>
@@ -92,20 +92,20 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         // ── Field Names ───────────────────────────────────────────────────────
         new Setting(containerEl).setName("Field names").setHeading();
 
-        const resolvedTypeField = this.plugin.typeService.getTypeFieldName();
-        const typeFieldDesc = this.plugin.settings.fields.type
-            ? "Frontmatter field that identifies a note's workflow object type. " +
-              "Used by navigation, reshelving, and open-by-type commands."
-            : "Frontmatter field that identifies a note's workflow object type. " +
-              `Resolved as "${resolvedTypeField}" using the selected schema source. ` +
+        const resolvedNoteTypeField = this.plugin.noteTypeService.getNoteTypeFieldName();
+        const noteTypeFieldDesc = this.plugin.settings.fields.type
+            ? "Frontmatter field that identifies the note type. " +
+              "Used by navigation, reshelving, and opening notes by note type."
+            : "Frontmatter field that identifies the note type. " +
+              `Resolved as "${resolvedNoteTypeField}" using the selected schema source. ` +
               "Set manually to override.";
 
         new Setting(containerEl)
-            .setName("Type field")
-            .setDesc(typeFieldDesc)
+            .setName("Note type field")
+            .setDesc(noteTypeFieldDesc)
             .addText((text) =>
                 text
-                    .setPlaceholder(resolvedTypeField)
+                    .setPlaceholder(resolvedNoteTypeField)
                     .setValue(this.plugin.settings.fields.type)
                     .onChange(async (value) => {
                         this.plugin.settings.fields.type = value.trim();
@@ -117,7 +117,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Title field")
             .setDesc(
-                "Frontmatter field used as the human-readable title of a workflow object. " +
+                "Frontmatter field used as the human-readable title of a note. " +
                 "Referenced as {{ title }} in path and filename templates (LiquidJS syntax)."
             )
             .addText((text) =>
@@ -137,7 +137,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Wrap around navigation")
             .setDesc(
-                "When navigating past the last workflow object of a type, wrap around to the first (and vice versa). " +
+                "When navigating past the last note of a note type, wrap around to the first (and vice versa). " +
                 "Disable to stop at the boundary."
             )
             .addToggle((toggle) =>
@@ -153,7 +153,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             .setName("Default field sort")
             .setDesc(
                 "Sort order applied by 'Sort frontmatter' when no explicit order is requested. " +
-                "'Schema order' follows the field sequence defined in the type definition; " +
+                "'Schema order' follows the field sequence defined in the note type definition; " +
                 "'Alphabetical' sorts A–Z regardless of schema."
             )
             .addDropdown((dropdown) =>
@@ -168,9 +168,9 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
-            .setName("Object list sort direction")
+            .setName("Typed note list sort direction")
             .setDesc(
-                "Sort order for file lists shown when navigating or opening objects by type. " +
+                "Sort order for file lists shown when navigating or opening notes by note type. " +
                 "Descending places the most recent timestamped filenames first, " +
                 "which is usually the most useful order."
             )
@@ -178,9 +178,9 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 dropdown
                     .addOption("desc", "Descending (newest first)")
                     .addOption("asc", "Ascending (oldest first)")
-                    .setValue(this.plugin.settings.objectSortDirection)
+                    .setValue(this.plugin.settings.typedNoteSortDirection)
                     .onChange(async (value) => {
-                        this.plugin.settings.objectSortDirection = value as "asc" | "desc";
+                        this.plugin.settings.typedNoteSortDirection = value as "asc" | "desc";
                         await this.plugin.saveSettings();
                     })
             );
@@ -207,7 +207,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("Date format")
             .setDesc(
-                "Moment.js format string used when writing date-type fields into new workflow objects. " +
+                "Moment.js format string used when writing date fields into new notes. " +
                 "Example: 'YYYY-MM-DDTHH:mm' produces '2024-03-15T09:30'."
             )
             .addText((text) =>
@@ -246,14 +246,14 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                     })
             );
 
-        // ── Object catalog defaults ───────────────────────────────────────────
-        new Setting(containerEl).setName("Object catalog defaults").setHeading();
+        // ── Typed note catalog defaults ───────────────────────────────────────────
+        new Setting(containerEl).setName("Typed note catalog defaults").setHeading();
 
         const catalogDesc = containerEl.createEl("p", { cls: "setting-item-description" });
         catalogDesc.createEl("span", {
             text:
-                "Default paths used when creating a new workflow object catalog (.base file). " +
-                "Use {{ content-type }} in LiquidJS syntax to insert the selected object type name.",
+                "Default paths used when creating a new typed note catalog (.base file). " +
+                "Use {{ content-type }} in LiquidJS syntax to insert the selected note type name.",
         });
 
         new Setting(containerEl)
@@ -262,7 +262,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
                 "Vault folder where catalog files are created. " +
                 "Leave empty to place catalogs in the vault root. " +
                 "Folders are created automatically as needed. " +
-                "Use {{ content-type }} in LiquidJS syntax to insert the object type name."
+                "Use {{ content-type }} in LiquidJS syntax to insert the note type name."
             )
             .addText((text) =>
                 text
@@ -373,17 +373,17 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
 
         const pathDesc = containerEl.createEl("p", { cls: "setting-item-description" });
         pathDesc.createEl("span", {
-            text: "Map a workflow object's type value to a destination folder. " +
-                  "The pattern is a regex matched against the type field value; " +
+            text: "Map the note type value to a destination folder. " +
+                  "The pattern is a regex matched against the note type field value; " +
                   "the first matching rule wins. " +
                   "Regex capture groups are available as $1, $2, … in the template.",
         });
         pathDesc.createEl("br");
         pathDesc.createEl("br");
-        pathDesc.createEl("span", { text: "Example: pattern ^(.+)$ → template content/$1 puts every type under content/<type>." });
+        pathDesc.createEl("span", { text: "Example: pattern ^(.+)$ → template content/$1 puts every note type under content/<note-type>." });
         pathDesc.createEl("br");
         pathDesc.createEl("br");
-        pathDesc.createEl("span", { text: TEMPLATE_SYNTAX, cls: "workflow-objects-code-hint" });
+        pathDesc.createEl("span", { text: TEMPLATE_SYNTAX, cls: "tnw-code-hint" });
 
         const mappingsContainer = containerEl.createDiv({ cls: "path-mappings" });
         this.renderPathMappings(mappingsContainer);
@@ -393,7 +393,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
 
         const filenameDesc = containerEl.createEl("p", { cls: "setting-item-description" });
         filenameDesc.createEl("span", {
-            text: "Map a workflow object's type value to a filename template. " +
+            text: "Map the note type value to a filename template. " +
                   "The first matching pattern wins. " +
                   "{{ date }} expands to the YYYYMMDDTHHmm date prefix. " +
                   "Any frontmatter field is available as a LiquidJS variable.",
@@ -405,7 +405,7 @@ export class WorkflowObjectsSettingTab extends PluginSettingTab {
         });
         filenameDesc.createEl("br");
         filenameDesc.createEl("br");
-        filenameDesc.createEl("span", { text: TEMPLATE_SYNTAX, cls: "workflow-objects-code-hint" });
+        filenameDesc.createEl("span", { text: TEMPLATE_SYNTAX, cls: "tnw-code-hint" });
 
         const filenameMappingsContainer = containerEl.createDiv({ cls: "filename-mappings" });
         this.renderFilenameMappings(filenameMappingsContainer);

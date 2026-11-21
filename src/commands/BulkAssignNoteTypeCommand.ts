@@ -1,28 +1,28 @@
 import { App, Notice } from "obsidian";
-import { WorkflowObjectsSettings, TypeAssignmentOptions } from "../types";
-import { TypeService } from "../services/TypeService";
+import { TypedNoteWorkflowsSettings, NoteTypeAssignmentOptions } from "../types";
+import { NoteTypeService } from "../services/NoteTypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
-import { BulkAssignTypeModal } from "../modals/BulkAssignTypeModal";
+import { BulkAssignNoteTypeModal } from "../modals/BulkAssignNoteTypeModal";
 import {
     BulkAssignPreviewModal,
     FilePreviewEntry,
 } from "../modals/BulkAssignPreviewModal";
-import { ObjectUpdateService } from "../services/ObjectUpdateService";
+import { TypedNoteUpdateService } from "../services/TypedNoteUpdateService";
 import { collectFiles } from "./VaultCurationCommand";
 
 /** Preview a scoped set of notes, then apply the same assignment policy as the single-note command. */
-export async function bulkAssignType(
+export async function bulkAssignNoteType(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     // ── Step 1: type names ────────────────────────────────────────────────────
-    const typeNames = typeService.getTypeNames();
-    if (!typeNames || typeNames.length === 0) return;
+    const noteTypeNames = noteTypeService.getAvailableNoteTypeNames();
+    if (!noteTypeNames || noteTypeNames.length === 0) return;
 
     // ── Step 2: configuration modal ───────────────────────────────────────────
-    const configModal = new BulkAssignTypeModal(app, settings, typeNames);
+    const configModal = new BulkAssignNoteTypeModal(app, settings, noteTypeNames);
     const opts = await configModal.openAndGetValue();
     if (!opts) return;
 
@@ -51,12 +51,12 @@ export async function bulkAssignType(
     }
 
     // ── Step 4: build preview entries ─────────────────────────────────────────
-    const typeField = typeService.getTypeFieldName();
+    const noteTypeField = noteTypeService.getNoteTypeFieldName();
     const entries: FilePreviewEntry[] = files.map((file) => {
         const fm =
             app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-        const currentType = fm[typeField] as string | undefined;
-        return { file, currentType };
+        const currentNoteType = fm[noteTypeField] as string | undefined;
+        return { file, currentNoteType };
     });
 
     // ── Step 5: preview / selection modal ─────────────────────────────────────
@@ -70,13 +70,13 @@ export async function bulkAssignType(
 
     // ── Step 6: execute ───────────────────────────────────────────────────────
     new Notice(
-        `Assigning type "${opts.targetType}" to ` +
+        `Assigning note type "${opts.targetType}" to ` +
             `${previewResult.selectedFiles.length} file(s)…`
     );
 
     const totals = { assigned: 0, cleaned: 0, sorted: 0, reshelved: 0, skipped: 0, errors: 0 };
 
-    const options: TypeAssignmentOptions = {
+    const options: NoteTypeAssignmentOptions = {
         targetType: opts.targetType,
         updateFileLocation: opts.runReshelve,
         autoRename: true,
@@ -86,17 +86,17 @@ export async function bulkAssignType(
         sortMode: opts.runSort ? opts.sortMode : "none",
         newFieldsPosition: "append",
     };
-    const objects = new ObjectUpdateService(app, settings, typeService, frontmatterService);
+    const typedNoteUpdates = new TypedNoteUpdateService(app, settings, noteTypeService, frontmatterService);
     for (const file of previewResult.selectedFiles) {
         try {
-            const result = await objects.assignType(file, options);
+            const result = await typedNoteUpdates.assignNoteType(file, options);
             if (!result) { totals.skipped++; continue; }
             totals.assigned++;
             if (opts.runClean) totals.cleaned++;
             if (opts.runSort) totals.sorted++;
             if (result.moved) totals.reshelved++;
         } catch (err) {
-            console.error(`[bulk-assign-type] Error on ${file.path}:`, err);
+            console.error(`[bulk-assign-note-type] Error on ${file.path}:`, err);
             totals.errors++;
         }
     }
@@ -115,7 +115,7 @@ function buildSummary(totals: {
     errors: number;
 }): string {
     const parts: string[] = [
-        `Assigned type to ${totals.assigned} file(s)`,
+        `Assigned note type to ${totals.assigned} file(s)`,
     ];
     if (totals.cleaned) parts.push(`cleaned ${totals.cleaned}`);
     if (totals.sorted && !totals.cleaned) parts.push(`sorted ${totals.sorted}`);

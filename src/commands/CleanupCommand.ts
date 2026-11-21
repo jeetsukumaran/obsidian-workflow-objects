@@ -1,10 +1,10 @@
 import { App, Notice } from "obsidian";
 import {
-    WorkflowObjectsSettings,
+    TypedNoteWorkflowsSettings,
     CleanupOptions,
     DEFAULT_CLEANUP_OPTIONS,
 } from "../types";
-import { TypeService } from "../services/TypeService";
+import { NoteTypeService } from "../services/NoteTypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
 import { StringSuggesterModal, ConfirmModal } from "../modals";
 import { getActiveFileWithMeta, formatValueForDisplay } from "../utils/helpers";
@@ -14,7 +14,7 @@ import { getActiveFileWithMeta, formatValueForDisplay } from "../utils/helpers";
  */
 export async function sortFrontmatter(
     app: App,
-    settings: WorkflowObjectsSettings,
+    settings: TypedNoteWorkflowsSettings,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const result = getActiveFileWithMeta(app);
@@ -28,7 +28,7 @@ export async function sortFrontmatter(
  */
 export async function sortFrontmatterSchema(
     app: App,
-    settings: WorkflowObjectsSettings,
+    settings: TypedNoteWorkflowsSettings,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const result = getActiveFileWithMeta(app);
@@ -42,7 +42,7 @@ export async function sortFrontmatterSchema(
  */
 export async function sortFrontmatterAlphabetical(
     app: App,
-    settings: WorkflowObjectsSettings,
+    settings: TypedNoteWorkflowsSettings,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const result = getActiveFileWithMeta(app);
@@ -56,8 +56,8 @@ export async function sortFrontmatterAlphabetical(
  */
 export async function cleanFrontmatterInteractive(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const result = getActiveFileWithMeta(app);
@@ -188,8 +188,8 @@ export async function cleanFrontmatterInteractive(
  */
 export async function cleanFrontmatterStandard(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const result = getActiveFileWithMeta(app);
@@ -211,8 +211,8 @@ export async function cleanFrontmatterStandard(
  */
 export async function cleanFrontmatterStrict(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const result = getActiveFileWithMeta(app);
@@ -263,7 +263,7 @@ async function getSortModeChoice(
  */
 async function getCustomCleanupOptions(
     app: App,
-    settings: WorkflowObjectsSettings
+    settings: TypedNoteWorkflowsSettings
 ): Promise<CleanupOptions> {
     const options: CleanupOptions = {
         preserveDefinedFields: true,
@@ -275,21 +275,21 @@ async function getCustomCleanupOptions(
     const q1 = new ConfirmModal(
         app,
         "Preserve defined fields?",
-        "Keep fields defined in type schema even if empty?"
+        "Keep fields defined in note type schema even if empty?"
     );
     options.preserveDefinedFields = await q1.openAndGetValue();
 
     const q2 = new ConfirmModal(
         app,
         "Remove undefined fields?",
-        "Delete fields NOT in type schema (even if they have values)?"
+        "Delete fields NOT in note type schema (even if they have values)?"
     );
     options.removeUndefinedFields = await q2.openAndGetValue();
 
     const q3 = new ConfirmModal(
         app,
         "Add missing fields?",
-        "Add fields from type schema that are missing?"
+        "Add fields from note type schema that are missing?"
     );
     options.addMissingFields = await q3.openAndGetValue();
 

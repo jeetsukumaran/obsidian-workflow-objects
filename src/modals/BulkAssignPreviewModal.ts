@@ -5,8 +5,8 @@ import { App, Modal, Setting, TFile } from "obsidian";
  */
 export interface FilePreviewEntry {
     file: TFile;
-    /** The file's current type value, if any */
-    currentType: string | undefined;
+    /** The file's current note type value, if any */
+    currentNoteType: string | undefined;
 }
 
 /**
@@ -18,14 +18,14 @@ export interface BulkAssignPreviewResult {
 }
 
 /**
- * Preview modal for the "Bulk assign object type" command.
+ * Preview modal for the "Bulk assign note type" command.
  *
  * Shows a scrollable, checkable list of files that will be affected.
  * All files are selected by default; the user can deselect individual files
  * or use "Select all" / "Select none" before committing.
  *
- * Each row shows the file path and, where present, the file's current type
- * value so the user can identify files that will have their type changed
+ * Each row shows the file path and, where present, the file's current note type
+ * value so the user can identify files that will have their note type changed
  * rather than set for the first time.
  *
  * On confirm, resolves with a {@link BulkAssignPreviewResult} via
@@ -51,7 +51,7 @@ export class BulkAssignPreviewModal extends Modal {
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl("h2", { text: "Preview: bulk assign type" });
+        contentEl.createEl("h2", { text: "Preview: bulk assign note type" });
 
         const selectedCount = (): number =>
             [...this.selections.values()].filter(Boolean).length;
@@ -59,7 +59,7 @@ export class BulkAssignPreviewModal extends Modal {
         // Live summary line
         const summaryEl = contentEl.createEl("p", {
             text: this.buildSummary(selectedCount()),
-            cls: "wfo-bulk-preview-summary",
+            cls: "tnw-bulk-preview-summary",
         });
 
         // Select all / none controls
@@ -82,7 +82,7 @@ export class BulkAssignPreviewModal extends Modal {
             );
 
         // Scrollable file list
-        const listEl = contentEl.createDiv({ cls: "wfo-bulk-preview-list" });
+        const listEl = contentEl.createDiv({ cls: "tnw-bulk-preview-list" });
         this.renderList(listEl, summaryEl, selectedCount);
 
         // Actions
@@ -131,7 +131,7 @@ export class BulkAssignPreviewModal extends Modal {
     private buildSummary(count: number): string {
         return (
             `${count} of ${this.entries.length} file(s) will be assigned ` +
-            `type "${this.targetType}".`
+            `note type "${this.targetType}".`
         );
     }
 
@@ -143,12 +143,12 @@ export class BulkAssignPreviewModal extends Modal {
         listEl.empty();
 
         for (const entry of this.entries) {
-            const row = listEl.createDiv({ cls: "wfo-bulk-preview-row" });
+            const row = listEl.createDiv({ cls: "tnw-bulk-preview-row" });
 
             // Checkbox
             const checkbox = row.createEl("input");
             checkbox.type = "checkbox";
-            checkbox.className = "wfo-bulk-preview-checkbox";
+            checkbox.className = "tnw-bulk-preview-checkbox";
             checkbox.checked = this.selections.get(entry.file.path) ?? true;
             checkbox.addEventListener("change", () => {
                 this.selections.set(entry.file.path, checkbox.checked);
@@ -158,14 +158,14 @@ export class BulkAssignPreviewModal extends Modal {
             // File path
             row.createEl("span", {
                 text: entry.file.path,
-                cls: "wfo-bulk-preview-path",
+                cls: "tnw-bulk-preview-path",
             });
 
-            // Current type annotation (if the file already has a type set)
-            if (entry.currentType !== undefined) {
+            // Current note type annotation (if the file already has a note type set)
+            if (entry.currentNoteType !== undefined) {
                 row.createEl("span", {
-                    text: `← ${entry.currentType}`,
-                    cls: "wfo-bulk-preview-current-type",
+                    text: `← ${entry.currentNoteType}`,
+                    cls: "tnw-bulk-preview-current-note-type",
                 });
             }
         }

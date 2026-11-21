@@ -1,16 +1,16 @@
 import { App, TFile, Notice, parseYaml } from "obsidian";
 import {
-    WorkflowObjectsSettings,
+    TypedNoteWorkflowsSettings,
     CleanupOptions,
     CleanupAnalysis,
     CleanupStats,
     MissingFrontmatterMode,
-    TypeAssignmentOptions,
-    TypeFieldInfo,
+    NoteTypeAssignmentOptions,
+    NoteTypeFieldInfo,
     SchemaResolution,
     DEFAULT_CLEANUP_OPTIONS,
 } from "../types";
-import { TypeService } from "./TypeService";
+import { NoteTypeService } from "./NoteTypeService";
 import { isEmptyValue, sortEntries, SortMode } from "../utils/helpers";
 
 /** Prepared metadata edit, retained while the destination is checked. */
@@ -29,8 +29,8 @@ export interface PreparedFrontmatterEdit {
 export class FrontmatterService {
     constructor(
         private app: App,
-        private settings: WorkflowObjectsSettings,
-        private typeService: TypeService
+        private settings: TypedNoteWorkflowsSettings,
+        private noteTypeService: NoteTypeService
     ) {}
 
     /**
@@ -44,11 +44,11 @@ export class FrontmatterService {
         mode: MissingFrontmatterMode
     ): Promise<number> {
         const original = await this.readFrontmatter(file);
-        const schemaSignature = this.typeService.schemaSignature(file);
-        const resolution = await this.typeService.resolveNoteSchema(file, original);
+        const schemaSignature = this.noteTypeService.schemaSignature(file);
+        const resolution = await this.noteTypeService.resolveNoteSchema(file, original);
         const frontmatter = { ...original };
-        const added = this.insertFields(frontmatter, resolution.typeInfo?.fieldDefaults ?? new Map(),
-            resolution.typeInfo?.fieldOrder ?? null, mode);
+        const added = this.insertFields(frontmatter, resolution.noteTypeInfo?.fieldDefaults ?? new Map(),
+            resolution.noteTypeInfo?.fieldOrder ?? null, mode);
         await this.applyPreparedEdit(file, { sourcePath: file.path, original, frontmatter, added, removed: 0, schemaSignature });
         return added;
     }
@@ -67,46 +67,46 @@ export class FrontmatterService {
         return parsed as Record<string, unknown>;
     }
 
-    /** Plan against the selected type and the final location, retaining contextual classes. */
-    async prepareTypeAssignment(
+    /** Plan against the selected note type and the final location, retaining contextual classes. */
+    async prepareNoteTypeAssignment(
         file: TFile,
-        options: TypeAssignmentOptions,
+        options: NoteTypeAssignmentOptions,
         destination = file.path,
         original?: Record<string, unknown>,
         suppliedTitle?: string,
         edits: Record<string, unknown> = {}
     ): Promise<PreparedFrontmatterEdit> {
         original ??= await this.readFrontmatter(file);
-        const schemaSignature = this.typeService.schemaSignature(file);
-        const typeField = this.typeService.getTypeFieldName();
+        const schemaSignature = this.noteTypeService.schemaSignature(file);
+        const noteTypeField = this.noteTypeService.getNoteTypeFieldName();
         const input = { ...original, ...edits };
-        const resolution = await this.typeService.resolveNoteSchema(file, { ...input, [typeField]: options.targetType }, destination);
-        if (!resolution.schemaComplete || !resolution.typeInfo) {
-            throw new Error(resolution.issues.join("; ") || `No field schema available for type "${options.targetType}"`);
+        const resolution = await this.noteTypeService.resolveNoteSchema(file, { ...input, [noteTypeField]: options.targetType }, destination);
+        if (!resolution.schemaComplete || !resolution.noteTypeInfo) {
+            throw new Error(resolution.issues.join("; ") || `No field schema available for note type "${options.targetType}"`);
         }
-        const { typeInfo, protectedFields } = resolution;
+        const { noteTypeInfo, protectedFields } = resolution;
         const titleField = this.settings.fields.title;
         // An explicitly entered title is part of this edit, even when the
         // destination schema does not declare it.
         if (suppliedTitle !== undefined || Object.prototype.hasOwnProperty.call(edits, titleField)) protectedFields.add(titleField);
         let removed = 0;
-        const removeField = (key: string, value: unknown): boolean => !protectedFields.has(key) && !typeInfo.definedFields.has(key) &&
+        const removeField = (key: string, value: unknown): boolean => !protectedFields.has(key) && !noteTypeInfo.definedFields.has(key) &&
             (options.removeFields === "all" || (options.removeFields === "empty" && isEmptyValue(value)));
         const retained = Object.entries(original).filter(([key, value]) => {
             const remove = removeField(key, Object.prototype.hasOwnProperty.call(edits, key) ? edits[key] : value);
             if (remove) removed++;
             return !remove;
-        }).map(([key]): [string, unknown] => [key, key === typeField ? options.targetType
+        }).map(([key]): [string, unknown] => [key, key === noteTypeField ? options.targetType
             : key === titleField && suppliedTitle !== undefined ? suppliedTitle : input[key]]);
         const frontmatter: Record<string, unknown> = Object.fromEntries(retained);
-        const defaults = options.addMissingFields ? new Map(typeInfo.fieldDefaults) : new Map<string, unknown>();
+        const defaults = options.addMissingFields ? new Map(noteTypeInfo.fieldDefaults) : new Map<string, unknown>();
         for (const [key, value] of Object.entries(edits)) {
             if (!Object.prototype.hasOwnProperty.call(original, key) && !removeField(key, value)) defaults.set(key, value);
         }
         if (suppliedTitle !== undefined) defaults.set(titleField, suppliedTitle);
-        defaults.set(typeField, options.targetType);
+        defaults.set(noteTypeField, options.targetType);
         const mode = options.sortMode === "none" ? options.newFieldsPosition : options.sortMode;
-        const added = this.insertFields(frontmatter, defaults, typeInfo.fieldOrder, mode);
+        const added = this.insertFields(frontmatter, defaults, noteTypeInfo.fieldOrder, mode);
         return { sourcePath: file.path, original, frontmatter, added, removed, schemaSignature };
     }
 
@@ -144,7 +144,7 @@ export class FrontmatterService {
     }
 
     private validatePreparedEdit(file: TFile, fm: Record<string, unknown>, prepared: PreparedFrontmatterEdit): void {
-        if (prepared.schemaSignature && prepared.schemaSignature !== this.typeService.schemaSignature(file)) {
+        if (prepared.schemaSignature && prepared.schemaSignature !== this.noteTypeService.schemaSignature(file)) {
             throw new Error("The schema or class bindings changed while preparing the edit. Run the command again.");
         }
         if (file.path !== prepared.sourcePath || JSON.stringify(fm) !== JSON.stringify(prepared.original)) {
@@ -152,7 +152,7 @@ export class FrontmatterService {
         }
     }
 
-    /** Insert defaults and arrange fields for both insertion and type assignment. */
+    /** Insert defaults and arrange fields for both insertion and note type assignment. */
     private insertFields(
         fm: Record<string, unknown>,
         defaults: Map<string, unknown>,
@@ -193,21 +193,21 @@ export class FrontmatterService {
 
     /** The same removal policy drives preview and execution. Unknown schemas never authorize deletion. */
     analyzeCleanup(
-        fm: Record<string, unknown>, typeInfo: TypeFieldInfo | null, options: CleanupOptions,
-        schemaComplete = true, protectedFields = new Set([this.typeService.getTypeFieldName()])
+        fm: Record<string, unknown>, noteTypeInfo: NoteTypeFieldInfo | null, options: CleanupOptions,
+        schemaComplete = true, protectedFields = new Set([this.noteTypeService.getNoteTypeFieldName()])
     ): CleanupAnalysis {
         const toRemove: CleanupAnalysis["toRemove"] = [];
         for (const [key, value] of Object.entries(fm)) {
             if (protectedFields.has(key)) continue;
             const isEmpty = isEmptyValue(value);
-            const defined = typeInfo?.definedFields.has(key) ?? false;
+            const defined = noteTypeInfo?.definedFields.has(key) ?? false;
             const remove = defined ? isEmpty && !options.preserveDefinedFields
                 : schemaComplete && ((isEmpty && options.removeEmptyUndefinedFields !== false) ||
-                    (options.removeUndefinedFields && typeInfo !== null));
+                    (options.removeUndefinedFields && noteTypeInfo !== null));
             if (remove) toRemove.push({ key, value, isEmpty });
         }
-        const toAdd = options.addMissingFields && typeInfo
-            ? [...typeInfo.fieldDefaults.keys()].filter(key => !Object.prototype.hasOwnProperty.call(fm, key)) : [];
+        const toAdd = options.addMissingFields && noteTypeInfo
+            ? [...noteTypeInfo.fieldDefaults.keys()].filter(key => !Object.prototype.hasOwnProperty.call(fm, key)) : [];
         return { toRemove, toAdd };
     }
 
@@ -215,17 +215,17 @@ export class FrontmatterService {
         prepared: PreparedFrontmatterEdit; analysis: CleanupAnalysis; stats: CleanupStats; resolution: SchemaResolution;
     }> {
         const original = await this.readFrontmatter(file);
-        const schemaSignature = this.typeService.schemaSignature(file);
-        const resolution = await this.typeService.resolveNoteSchema(file, original);
-        const { typeInfo, schemaComplete, protectedFields } = resolution;
-        const analysis = this.analyzeCleanup(original, typeInfo, options, schemaComplete, protectedFields);
+        const schemaSignature = this.noteTypeService.schemaSignature(file);
+        const resolution = await this.noteTypeService.resolveNoteSchema(file, original);
+        const { noteTypeInfo, schemaComplete, protectedFields } = resolution;
+        const analysis = this.analyzeCleanup(original, noteTypeInfo, options, schemaComplete, protectedFields);
         const removed = new Set(analysis.toRemove.map(entry => entry.key));
         const frontmatter = Object.fromEntries(Object.entries(original).filter(([key]) => !removed.has(key)));
-        const added = this.insertFields(frontmatter, options.addMissingFields ? typeInfo?.fieldDefaults ?? new Map() : new Map(),
-            typeInfo?.fieldOrder ?? null, options.sortMode === "none" ? "append" : options.sortMode);
+        const added = this.insertFields(frontmatter, options.addMissingFields ? noteTypeInfo?.fieldDefaults ?? new Map() : new Map(),
+            noteTypeInfo?.fieldOrder ?? null, options.sortMode === "none" ? "append" : options.sortMode);
         const stats: CleanupStats = {
             removed: [...removed], added: Object.keys(frontmatter).filter(key => !Object.prototype.hasOwnProperty.call(original, key)),
-            preserved: Object.keys(original).filter(key => !removed.has(key) && isEmptyValue(original[key]) && typeInfo?.definedFields.has(key)),
+            preserved: Object.keys(original).filter(key => !removed.has(key) && isEmptyValue(original[key]) && noteTypeInfo?.definedFields.has(key)),
         };
         return { prepared: { sourcePath: file.path, original, frontmatter, added, removed: removed.size, schemaSignature }, analysis, stats, resolution };
     }

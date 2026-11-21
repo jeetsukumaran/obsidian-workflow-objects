@@ -1,8 +1,8 @@
 import { App, Modal, Setting } from "obsidian";
-import { ObjectField, ObjectFieldService, FileCandidate } from "../services/ObjectFieldService";
+import { TypedNoteField, TypedNoteFieldService, FileCandidate } from "../services/TypedNoteFieldService";
 
 /** FileClass-style candidates, keeping multi-selection in source-view order. */
-export class ObjectFilePickerModal extends Modal {
+export class TypedNoteFilePickerModal extends Modal {
     private selected = new Map<string, FileCandidate>();
     private items: FileCandidate[] = [];
     private resolve: ((value: FileCandidate[] | null) => void) | null = null;
@@ -12,13 +12,13 @@ export class ObjectFilePickerModal extends Modal {
     private listEl!: HTMLElement;
     private statusEl!: HTMLElement;
 
-    constructor(app: App, private field: ObjectField, private fields: ObjectFieldService) {
+    constructor(app: App, private field: TypedNoteField, private fields: TypedNoteFieldService) {
         super(app);
         for (const candidate of field.links) this.selected.set(candidate.file.path, candidate);
     }
 
     onOpen(): void {
-        this.modalEl.addClass("wfo-create-modal");
+        this.modalEl.addClass("tnw-create-modal");
         this.contentEl.createEl("h2", { text: `Choose ${this.field.definition.name}` });
         this.statusEl = this.contentEl.createEl("p", { cls: "setting-item-description", attr: { "aria-live": "polite" } });
         new Setting(this.contentEl).setName("Filter files").addText(text => {
@@ -27,7 +27,7 @@ export class ObjectFilePickerModal extends Modal {
         });
         new Setting(this.contentEl).setName("Show all files").setDesc("Ignore the field's base view for this selection.")
             .addToggle(toggle => toggle.onChange(value => { void this.load(value); }));
-        this.listEl = this.contentEl.createDiv({ cls: "wfo-create-file-list" });
+        this.listEl = this.contentEl.createDiv({ cls: "tnw-create-file-list" });
         new Setting(this.contentEl)
             .addButton(button => button.setButtonText("Use selected files").setCta().onClick(() => {
                 const available = new Map(this.items.map(item => [item.file.path, item]));

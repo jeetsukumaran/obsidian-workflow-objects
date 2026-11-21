@@ -3,10 +3,10 @@ import { TFile } from "obsidian";
 /**
  * Plugin settings interface
  */
-export interface WorkflowObjectsSettings {
+export interface TypedNoteWorkflowsSettings {
     /** Auto prefers FileClass, then Metadata Menu, then standalone schemas. */
     schemaSource: "auto" | "fileclass" | "metadata-menu" | "standalone";
-    /** Path to type definitions (null = read from the selected integration). */
+    /** Path to note type definitions (null = read from the selected integration). */
     typesPath: string | null;
     /** Standalone schema folder when no explicit path is set. */
     typesPathFallback: string;
@@ -30,13 +30,13 @@ export interface WorkflowObjectsSettings {
     dateFormat: string;
     /** Default field sort mode for frontmatter */
     defaultFieldSort: "schema" | "alphabetical";
-    /** Sort direction for object lists (files matching a type) */
-    objectSortDirection: "asc" | "desc";
-    /** Default directory template for new object catalogs.
-     *  Use {{ content-type }} in LiquidJS syntax as a placeholder for the type name. */
+    /** Sort direction for typed note lists (files matching a note type) */
+    typedNoteSortDirection: "asc" | "desc";
+    /** Default directory template for new typed note catalogs.
+     *  Use {{ content-type }} in LiquidJS syntax as a placeholder for the note type name. */
     catalogDir: string;
-    /** Default filename template for new object catalogs.
-     *  Use {{ content-type }} in LiquidJS syntax as a placeholder for the type name. */
+    /** Default filename template for new typed note catalogs.
+     *  Use {{ content-type }} in LiquidJS syntax as a placeholder for the note type name. */
     catalogFilename: string;
     /** Whether to register sentence-case displayNames for all schema fields by default */
     catalogRemapDisplayNames: boolean;
@@ -44,12 +44,12 @@ export interface WorkflowObjectsSettings {
     catalogCtimeField: CatalogTimestampField;
     /** Configuration for the auto-appended file.mtime column */
     catalogMtimeField: CatalogTimestampField;
-    /** Last submitted options for assigning an object to a different type. */
-    typeAssignment: TypeAssignmentOptions;
+    /** Last submitted options for assigning a note to a different note type. */
+    typeAssignment: NoteTypeAssignmentOptions;
 }
 
-/** Options remembered by the object type assignment dialog. */
-export interface TypeAssignmentOptions {
+/** Options remembered by the note type assignment dialog. */
+export interface NoteTypeAssignmentOptions {
     targetType: string;
     updateFileLocation: boolean;
     autoRename: boolean;
@@ -90,7 +90,7 @@ export interface CleanupOptions {
     removeEmptyUndefinedFields?: boolean;
     /** Add missing fields from schema with defaults */
     addMissingFields: boolean;
-    /** Sort fields: "schema" for type definition order, "alphabetical" for A-Z, "none" to skip sorting */
+    /** Sort fields: "schema" for note type definition order, "alphabetical" for A-Z, "none" to skip sorting */
     sortMode: "schema" | "alphabetical" | "none";
 }
 
@@ -100,8 +100,8 @@ export type MissingFrontmatterMode = "alphabetical" | "schema" | "append" | "pre
 /**
  * Resolved root fields from fileClass definitions.
  */
-export interface TypeFieldInfo {
-    /** Set of field names defined in the type */
+export interface NoteTypeFieldInfo {
+    /** Set of field names defined in the note type */
     definedFields: Set<string>;
     /** Map of field names to their default values */
     fieldDefaults: Map<string, unknown>;
@@ -115,8 +115,8 @@ export interface TypeFieldInfo {
 
 /** A complete schema is required before removing any unknown property. */
 export interface SchemaResolution {
-    typeInfo: TypeFieldInfo | null;
-    typeNames: string[];
+    noteTypeInfo: NoteTypeFieldInfo | null;
+    noteTypeNames: string[];
     schemaComplete: boolean;
     issues: string[];
     protectedFields: Set<string>;
@@ -135,9 +135,9 @@ export interface FieldDefinition {
 }
 
 /**
- * Type definition frontmatter structure
+ * Note type definition frontmatter structure
  */
-export interface TypeDefinitionFrontmatter {
+export interface NoteTypeDefinitionFrontmatter {
     fields?: FieldDefinition[];
     fieldsOrder?: string[];
     [key: string]: unknown;
@@ -175,7 +175,7 @@ export interface CleanupStats {
 /**
  * Default settings
  */
-export const DEFAULT_SETTINGS: WorkflowObjectsSettings = {
+export const DEFAULT_SETTINGS: TypedNoteWorkflowsSettings = {
     schemaSource: "auto",
     typesPath: null,
     typesPathFallback: "system/schema/content-types",
@@ -196,7 +196,7 @@ export const DEFAULT_SETTINGS: WorkflowObjectsSettings = {
     ],
     dateFormat: "YYYY-MM-DDTHH:mm",
     defaultFieldSort: "schema",
-    objectSortDirection: "desc",
+    typedNoteSortDirection: "desc",
     catalogDir: "",
     catalogFilename: "{{ content-type }}.base",
     catalogRemapDisplayNames: true,

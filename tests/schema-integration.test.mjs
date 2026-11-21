@@ -45,19 +45,19 @@ for (const source of ["none", "fileclass", "metadata-menu"]) {
 test("automatic source prefers FileClass; explicit selection and standalone remain independent", async () => {
     const env = await assignmentHost({ source: "fileclass", providerSettings: { fileClassAlias: "kind" }, settings: { typesPath: null } });
     env.app.plugins.plugins["metadata-menu"] = { settings: { classFilesPath: "old-types/", fileClassAlias: "legacy" } };
-    assert.equal(env.plugin.typeService.getSource(), "fileclass");
-    assert.equal(env.plugin.typeService.getTypeFieldName(), "kind");
-    assert.equal(env.plugin.typeService.getTypesPath(), "types");
+    assert.equal(env.plugin.noteTypeService.getSource(), "fileclass");
+    assert.equal(env.plugin.noteTypeService.getNoteTypeFieldName(), "kind");
+    assert.equal(env.plugin.noteTypeService.getNoteTypesPath(), "types");
     env.plugin.settings.schemaSource = "metadata-menu";
-    assert.equal(env.plugin.typeService.getTypesPath(), "old-types");
-    assert.equal(env.plugin.typeService.getTypeFieldName(), "legacy");
+    assert.equal(env.plugin.noteTypeService.getNoteTypesPath(), "old-types");
+    assert.equal(env.plugin.noteTypeService.getNoteTypeFieldName(), "legacy");
     env.plugin.settings.schemaSource = "standalone";
-    assert.equal(env.plugin.typeService.getTypesPath(), "system/schema/content-types");
-    assert.equal(env.plugin.typeService.getTypeFieldName(), "fileClass");
+    assert.equal(env.plugin.noteTypeService.getNoteTypesPath(), "system/schema/content-types");
+    assert.equal(env.plugin.noteTypeService.getNoteTypeFieldName(), "fileClass");
     env.plugin.settings.fields.type = "manual";
     env.plugin.settings.typesPath = "custom/";
-    assert.equal(env.plugin.typeService.getTypeFieldName(), "manual");
-    assert.equal(env.plugin.typeService.getTypesPath(), "custom");
+    assert.equal(env.plugin.noteTypeService.getNoteTypeFieldName(), "manual");
+    assert.equal(env.plugin.noteTypeService.getNoteTypesPath(), "custom");
     await env.plugin.saveSettings();
     await env.reload();
     assert.equal(env.plugin.settings.schemaSource, "standalone");
@@ -97,7 +97,7 @@ test("all insertion modes recognize name and legacy ID orders", async () => {
 
 test("nested class folders are listed and assigned using their relative class names", async () => {
     const env = await assignmentHost({ source: "fileclass", schemas: { "work/project": schema("title") }, options: { ...noMove, targetType: "work/project" } });
-    assert.deepEqual(env.plugin.typeService.getTypeNames(), ["work/project"]);
+    assert.deepEqual(env.plugin.noteTypeService.getAvailableNoteTypeNames(), ["work/project"]);
     await env.assign();
     assert.equal(env.frontmatter.fileClass, "work/project");
 });
@@ -185,13 +185,13 @@ test("bulk reassignment shares destination schema handling and never cleans agai
         schemas: { old: schema("oldValue"), parent: schema("inherited"), project: { extends: "parent", fields: [] },
             destination: { ...schema("destinationValue"), filesPaths: ["content/project"] } },
     });
-    env.classes.BulkAssignTypeModal.prototype.openAndGetValue = async () => ({ targetType: "project", directory: "inbox", recursive: true,
+    env.classes.BulkAssignNoteTypeModal.prototype.openAndGetValue = async () => ({ targetType: "project", directory: "inbox", recursive: true,
         includePattern: "", excludePattern: "", runClean: true, cleanMode: "strict", runSort: true, sortMode: "schema", runReshelve: true });
     env.classes.BulkAssignPreviewModal.prototype.openAndGetValue = async () => ({ selectedFiles: [env.file] });
-    await env.plugin.commands.get("bulk-assign-type").callback();
+    await env.plugin.commands.get("bulk-assign-note-type").callback();
     assert.deepEqual(env.frontmatter, { inherited: "keep", destinationValue: "keep", fileClass: "project" });
     assert.equal(env.writes.length, 1);
-    assert.match(env.notices.at(-1), /Assigned type to 1 file/);
+    assert.match(env.notices.at(-1), /Assigned note type to 1 file/);
 });
 
 test("Metadata Menu query bindings prevent unsafe removal instead of assuming an incomplete schema is complete", async () => {
@@ -258,11 +258,11 @@ test("legacy presets do not protect fields from explicit schema enforcement", as
     assert.equal(env.frontmatter.title, "Keep");
 });
 
-test("reshelving accepts multiple explicit types and uses the first for naming", async () => {
+test("reshelving accepts multiple explicit note types and uses the first for naming", async () => {
     const env = await assignmentHost({ source: "fileclass", frontmatter: { fileClass: ["first", "second"], title: "Keep" },
         schemas: { first: schema(), second: schema() },
     });
-    await env.plugin.commands.get("reshelve-workflow-object").callback();
+    await env.plugin.commands.get("reshelve-typed-note").callback();
     assert.equal(env.file.path, "content/first/20240102T0304--Keep.md");
     assert.deepEqual(env.frontmatter.fileClass, ["first", "second"]);
 });
@@ -271,8 +271,8 @@ test("navigation membership and reshelving recognize contextual types", async ()
     const env = await assignmentHost({ source: "fileclass", frontmatter: { title: "Keep", tags: ["project"] },
         schemas: { project: { ...schema(), mapWithTag: true } },
     });
-    assert.deepEqual(env.plugin.typeService.getFilesOfType("project"), [env.file]);
-    await env.plugin.commands.get("reshelve-workflow-object").callback();
+    assert.deepEqual(env.plugin.noteTypeService.getTypedNotesOfType("project"), [env.file]);
+    await env.plugin.commands.get("reshelve-typed-note").callback();
     assert.equal(env.file.path, "content/project/20240102T0304--Keep.md");
 });
 
@@ -281,11 +281,11 @@ test("new note creation uses inherited root fields and does not flatten nested c
         fields: [field("group", "Object"), field("child", "Input", { path: "groupId" })], fieldsOrder: ["group", "inherited"],
     } } });
     env.classes.StringSuggesterModal.prototype.openAndGetValue = async () => "project";
-    env.classes.ObjectFieldsModal.prototype.openAndSave = async function () {
+    env.classes.TypedNoteFieldsModal.prototype.openAndSave = async function () {
         this.draft.fields.find(field => field.definition.name === "title").text = "Created title";
         return this.draft.save();
     };
-    await env.plugin.commands.get("create-new-workflow-object").callback();
+    await env.plugin.commands.get("create-new-typed-note").callback();
     assert.equal(env.created.length, 1);
     const fm = JSON.parse(env.created[0].content.split("---\n")[1]);
     assert.deepEqual(fm.group, { child: "" });

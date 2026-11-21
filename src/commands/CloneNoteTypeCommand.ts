@@ -1,15 +1,15 @@
 import { App, Notice, TFile } from "obsidian";
-import { WorkflowObjectsSettings } from "../types";
-import { TypeService } from "../services/TypeService";
+import { TypedNoteWorkflowsSettings } from "../types";
+import { NoteTypeService } from "../services/NoteTypeService";
 import { StringSuggesterModal } from "../modals/SuggesterModal";
-import { CloneObjectTypeModal } from "../modals/CloneObjectTypeModal";
+import { CloneNoteTypeModal } from "../modals/CloneNoteTypeModal";
 import { ensureFolderExists } from "../utils/pathUtils";
 
 /**
- * "Clone object type" command.
+ * "Clone note type" command.
  *
  * Flow:
- *  1. Suggest-modal: pick the source object type to clone from.
+ *  1. Suggest-modal: pick the source note type to clone from.
  *  2. Clone modal: set a name, select / rename / reorder fields.
  *  3. Create the new fileClass `.md` file and populate its frontmatter via
  *     Obsidian's `processFrontMatter` — the same mechanism Metadata Menu
@@ -19,42 +19,42 @@ import { ensureFolderExists } from "../utils/pathUtils";
  * the required functionality (field-value operations).  Cloning a fileClass
  * definition is not part of that API, so we write the file directly.
  */
-export async function cloneObjectType(
+export async function cloneNoteType(
     app: App,
-    _settings: WorkflowObjectsSettings,
-    typeService: TypeService
+    _settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService
 ): Promise<void> {
     try {
-        // ── Step 1: choose source type ─────────────────────────────────────
-        const typeNames = typeService.getTypeNames();
-        if (!typeNames || typeNames.length === 0) return;
+        // ── Step 1: choose source note type ─────────────────────────────────────
+        const noteTypeNames = noteTypeService.getAvailableNoteTypeNames();
+        if (!noteTypeNames || noteTypeNames.length === 0) return;
 
         const suggester = new StringSuggesterModal(
             app,
-            typeNames,
-            "Clone object type — choose source"
+            noteTypeNames,
+            "Clone note type — choose source"
         );
         const sourceName = await suggester.openAndGetValue();
         if (!sourceName) return;
 
-        const sourceFields = typeService.getTypeFieldDefinitions(sourceName);
+        const sourceFields = noteTypeService.getNoteTypeFieldDefinitions(sourceName);
         if (!sourceFields || sourceFields.length === 0) {
             new Notice(`"${sourceName}" has no field definitions to clone.`);
             return;
         }
 
         // ── Step 2: show clone modal ───────────────────────────────────────
-        const modal = new CloneObjectTypeModal(
+        const modal = new CloneNoteTypeModal(
             app,
             sourceName,
             sourceFields,
-            typeNames
+            noteTypeNames
         );
         const result = await modal.openAndGetValue();
         if (!result) return;
 
         // ── Step 3: create the new fileClass file ─────────────────────────
-        const typesPath = typeService.getTypesPath();
+        const typesPath = noteTypeService.getNoteTypesPath();
         const newFilePath = `${typesPath}/${result.newName}.md`;
 
         // Guard against race-condition or stale existingNames list
@@ -85,9 +85,9 @@ export async function cloneObjectType(
             await leaf.openFile(createdFile);
         }
     } catch (error) {
-        console.error("Workflow Objects: Error cloning object type", error);
+        console.error("Typed Note Workflows: Error cloning note type", error);
         new Notice(
-            `Error cloning object type: ${error instanceof Error ? error.message : String(error)}`
+            `Error cloning note type: ${error instanceof Error ? error.message : String(error)}`
         );
     }
 }

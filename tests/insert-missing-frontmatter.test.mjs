@@ -75,12 +75,12 @@ async function fixture({
         constructor(path) { this.path = path; this.extension = extension; }
     }
     const file = new TFile(`note.${extension}`);
-    const typeFiles = new Map(Object.keys(schemas).map(name => [`types/${name}.md`, new TFile(`types/${name}.md`)]));
+    const noteTypeFiles = new Map(Object.keys(schemas).map(name => [`types/${name}.md`, new TFile(`types/${name}.md`)]));
     const app = {
         workspace: { getActiveFile: () => active ? file : null, on: () => ({}) },
         vault: {
-            getAbstractFileByPath: path => typeFiles.get(path) ?? null,
-            getMarkdownFiles: () => [...typeFiles.values()],
+            getAbstractFileByPath: path => noteTypeFiles.get(path) ?? null,
+            getMarkdownFiles: () => [...noteTypeFiles.values()],
             read: async () => `---\n${JSON.stringify(current)}\n---\nBody`,
         },
         metadataCache: {
@@ -211,13 +211,13 @@ for (const [index, [id, name]] of commands.entries()) {
     });
 }
 
-test("resolves the current type inside the update when the note cache is stale", async () => {
+test("resolves the current note type inside the update when the note cache is stale", async () => {
     const env = await fixture({ cachedFrontmatter: { fileClass: "old-type" } });
     await env.run(commands[1][0]);
     assert.deepEqual(Object.keys(env.frontmatter), expectedOrders[1]);
 });
 
-test("does not insert presets when the type definition is unavailable", async () => {
+test("does not insert presets when the note type definition is unavailable", async () => {
     const env = await fixture({ schemas: {} });
     await env.run(commands[1][0]);
     assert.deepEqual(Object.keys(env.frontmatter), ["extra", "fileClass", "status", "title", "zeta"]);
@@ -230,7 +230,7 @@ test("only schema declarations provide fields, even when presets contain the sam
     assert.equal(env.frontmatter.status, null, "Select comes from the schema; presets are ignored");
 });
 
-test("uses configured type aliases and updated settings", async () => {
+test("uses configured note type aliases and updated settings", async () => {
     const env = await fixture({ frontmatter: { kind: "article" } });
     env.plugin.settings.fields.type = "kind";
     await env.plugin.saveSettings();
@@ -247,7 +247,7 @@ test("reads schemas from the configured folder without Metadata Menu", async () 
     assert.equal(Object.hasOwn(env.frontmatter, "priority"), false);
 });
 
-test("uses Metadata Menu's configured type alias", async () => {
+test("uses Metadata Menu's configured note type alias", async () => {
     const env = await fixture({ frontmatter: { classification: "article" } });
     env.app.plugins.plugins["metadata-menu"].settings.fileClassAlias = "classification";
     await env.run(commands[2][0]);

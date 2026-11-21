@@ -1,8 +1,8 @@
 import { App, Notice, TFile, TFolder } from "obsidian";
-import { WorkflowObjectsSettings, CleanupOptions, DEFAULT_CLEANUP_OPTIONS } from "../types";
-import { TypeService } from "../services/TypeService";
+import { TypedNoteWorkflowsSettings, CleanupOptions, DEFAULT_CLEANUP_OPTIONS } from "../types";
+import { NoteTypeService } from "../services/NoteTypeService";
 import { FrontmatterService } from "../services/FrontmatterService";
-import { ObjectUpdateService } from "../services/ObjectUpdateService";
+import { TypedNoteUpdateService } from "../services/TypedNoteUpdateService";
 import { VaultCurationModal, VaultCurationOptions } from "../modals/VaultCurationModal";
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -12,8 +12,8 @@ import { VaultCurationModal, VaultCurationOptions } from "../modals/VaultCuratio
  */
 export async function curateVault(
     app: App,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const modal = new VaultCurationModal(app, settings);
@@ -40,12 +40,12 @@ export async function curateVault(
     new Notice(`Starting curation on ${files.length} file(s)…`);
 
     const totals = { cleaned: 0, sorted: 0, reshelved: 0, errors: 0 };
-    const objects = new ObjectUpdateService(app, settings, typeService, frontmatterService);
+    const typedNoteUpdates = new TypedNoteUpdateService(app, settings, noteTypeService, frontmatterService);
 
     for (const file of files) {
         try {
             if (opts.runClean) {
-                await runCleanOnFile(file, opts, settings, typeService, frontmatterService);
+                await runCleanOnFile(file, opts, settings, noteTypeService, frontmatterService);
                 totals.cleaned++;
             }
             if (opts.runSort) {
@@ -53,7 +53,7 @@ export async function curateVault(
                 totals.sorted++;
             }
             if (opts.runReshelve) {
-                const result = await objects.reshelve(file);
+                const result = await typedNoteUpdates.reshelve(file);
                 if (result?.moved) totals.reshelved++;
             }
         } catch (err) {
@@ -116,8 +116,8 @@ function collectFromFolder(
 async function runCleanOnFile(
     file: TFile,
     opts: VaultCurationOptions,
-    settings: WorkflowObjectsSettings,
-    typeService: TypeService,
+    settings: TypedNoteWorkflowsSettings,
+    noteTypeService: NoteTypeService,
     frontmatterService: FrontmatterService
 ): Promise<void> {
     const cleanOptions: CleanupOptions =

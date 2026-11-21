@@ -5,7 +5,7 @@ import { assignmentHost, original } from "./helpers/assignment-host.mjs";
 test("dialog exposes the requested defaults and dependent controls", async () => {
     const env = await assignmentHost({ settings: { defaultFieldSort: "alphabetical" } });
     const dialog = env.open();
-    assert.equal(dialog.modal.contentEl.children[0].text, "Assign object to different type");
+    assert.equal(dialog.modal.contentEl.children[0].text, "Assign note type");
     for (const name of ["Update file location", "Auto-rename", "Auto-reshelve", "Add missing fields"]) {
         assert.equal(dialog.control(name).value, true);
     }
@@ -102,7 +102,7 @@ for (const updateFileLocation of [false, true]) {
 test("all submitted choices survive saving and plugin reload", async () => {
     const env = await assignmentHost();
     const dialog = env.open();
-    dialog.control("New object type").change("old");
+    dialog.control("New note type").change("old");
     dialog.control("Auto-rename").change(false);
     dialog.control("Auto-reshelve").change(false);
     dialog.control("Update file location").change(false);
@@ -120,7 +120,7 @@ test("all submitted choices survive saving and plugin reload", async () => {
     await env.reload();
     assert.deepEqual(env.plugin.settings.typeAssignment, expected);
     const reopened = env.open();
-    assert.equal(reopened.control("New object type").value, "old");
+    assert.equal(reopened.control("New note type").value, "old");
     assert.equal(reopened.control("New fields").value, "prepend");
     assert.equal(reopened.row("New fields").settingEl.visible, true);
     assert.equal(reopened.row("Auto-rename").disabled, true);
@@ -151,12 +151,12 @@ test("cancel discards dialog edits and leaves remembered settings unchanged", as
 test("a removed remembered type falls back to the current available type", async () => {
     const env = await assignmentHost({ options: { targetType: "deleted" } });
     const dialog = env.open();
-    assert.equal(dialog.control("New object type").value, "old");
+    assert.equal(dialog.control("New note type").value, "old");
     dialog.click("Cancel");
     await dialog.completion;
 });
 
-test("custom type aliases are assigned and protected from removal", async () => {
+test("custom note type aliases are assigned and protected from removal", async () => {
     const env = await assignmentHost({
         frontmatter: { kind: "old", title: "Keep title" },
         settings: { fields: { type: "kind", title: "title" } },
@@ -253,7 +253,7 @@ for (const failure of ["read", "save", "folder", "write"]) {
         assert.equal(env.writes.length, 0);
         assert.equal(env.renames.length, failure === "write" ? 2 : 0);
         assert.equal(env.file.path, "inbox/20240102T0304--old-name.md");
-        assert.match(env.notices.at(-1), /Could not assign object type/);
+        assert.match(env.notices.at(-1), /Could not assign note type/);
     });
 }
 
@@ -262,7 +262,7 @@ test("rename failure leaves all metadata untouched", async () => {
     await env.assign();
     assert.deepEqual(env.frontmatter, original);
     assert.equal(env.file.path, "inbox/20240102T0304--old-name.md");
-    assert.match(env.notices.at(-1), /Could not assign object type: Rename failed/);
+    assert.match(env.notices.at(-1), /Could not assign note type: Rename failed/);
 });
 
 test("concurrent metadata edits are preserved and invalidate the prepared assignment", async () => {
@@ -279,7 +279,7 @@ test("concurrent metadata edits are preserved and invalidate the prepared assign
 test("no active note, unsupported files, and empty type folders do not open the dialog", async () => {
     for (const options of [{ active: false }, { path: "picture.png" }, { schemas: {} }]) {
         const env = await assignmentHost(options);
-        await env.plugin.commands.get("assign-object-to-different-type").callback();
+        await env.plugin.commands.get("assign-note-type").callback();
         assert.equal(env.modals.length, 0);
         assert.equal(env.writes.length, 0);
     }
@@ -287,7 +287,7 @@ test("no active note, unsupported files, and empty type folders do not open the 
 
 test("the existing reshelve command still uses the same title and date rules", async () => {
     const env = await assignmentHost();
-    await env.plugin.commands.get("reshelve-workflow-object").callback();
+    await env.plugin.commands.get("reshelve-typed-note").callback();
     assert.equal(env.file.path, "content/old/20240102T0304--Current title.md");
     assert.deepEqual(env.frontmatter, original);
 });

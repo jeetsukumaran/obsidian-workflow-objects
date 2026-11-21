@@ -1,12 +1,12 @@
 import { App, ButtonComponent, Modal, Setting, TextComponent } from "obsidian";
-import { ObjectField, ObjectFieldService, DATE_INPUTS, fieldOptions, isLinkField, isListField } from "../services/ObjectFieldService";
+import { TypedNoteField, TypedNoteFieldService, DATE_INPUTS, fieldOptions, isLinkField, isListField } from "../services/TypedNoteFieldService";
 import { FilePathInfo } from "../utils/pathUtils";
-import { ObjectFilePickerModal } from "./ObjectFilePickerModal";
+import { TypedNoteFilePickerModal } from "./TypedNoteFilePickerModal";
 
-export interface ObjectFormDraft<Result> {
-    typeName: string;
-    fields: ObjectField[];
-    fieldService: ObjectFieldService;
+export interface TypedNoteFormDraft<Result> {
+    noteTypeName: string;
+    fields: TypedNoteField[];
+    fieldService: TypedNoteFieldService;
     folderOverride?: string;
     filenameOverride?: string;
     summary?: string;
@@ -14,8 +14,8 @@ export interface ObjectFormDraft<Result> {
     save(): Promise<Result>;
 }
 
-/** Shared field editing and validation for creation and type reassignment. */
-export class ObjectFieldsModal<Result> extends Modal {
+/** Shared field editing and validation for creation and note type reassignment. */
+export class TypedNoteFieldsModal<Result> extends Modal {
     private resolve: ((result: Result | null) => void) | null = null;
     private result: Result | null = null;
     private saving = false;
@@ -25,7 +25,7 @@ export class ObjectFieldsModal<Result> extends Modal {
     private formEl!: HTMLFieldSetElement;
     private fieldsEl!: HTMLElement;
     private summaryEl!: HTMLElement;
-    private renderedFields: ObjectField[] = [];
+    private renderedFields: TypedNoteField[] = [];
     private errorEl!: HTMLElement;
     private previewEl!: HTMLElement;
     private directoryInput!: TextComponent;
@@ -33,23 +33,23 @@ export class ObjectFieldsModal<Result> extends Modal {
     private createButton!: ButtonComponent;
     private cancelButton!: ButtonComponent;
 
-    constructor(app: App, readonly draft: ObjectFormDraft<Result>, private options = {
-        title: "Create workflow object", submitLabel: "Create object", locationOverrides: true,
+    constructor(app: App, readonly draft: TypedNoteFormDraft<Result>, private options = {
+        title: "Create typed note", submitLabel: "Create typed note", locationOverrides: true,
     }) { super(app); }
 
     onOpen(): void {
-        this.modalEl.addClass("wfo-create-modal");
+        this.modalEl.addClass("tnw-create-modal");
         this.contentEl.createEl("h2", { text: this.options.title });
-        this.contentEl.createEl("p", { text: `Object type: ${this.draft.typeName}`, cls: "wfo-create-type" });
-        this.formEl = this.contentEl.createEl("fieldset", { cls: "wfo-create-form" });
+        this.contentEl.createEl("p", { text: `Note type: ${this.draft.noteTypeName}`, cls: "tnw-create-note-type" });
+        this.formEl = this.contentEl.createEl("fieldset", { cls: "tnw-create-form" });
         this.fieldsEl = this.formEl.createDiv();
         this.renderedFields = this.draft.fields;
         this.renderFields(this.fieldsEl, this.draft.fields);
         if (this.options.locationOverrides) this.renderLocation();
-        else this.previewEl = this.formEl.createEl("p", { cls: "wfo-create-path", attr: { "aria-live": "polite" } });
+        else this.previewEl = this.formEl.createEl("p", { cls: "tnw-create-path", attr: { "aria-live": "polite" } });
         this.summaryEl = this.formEl.createEl("p", { cls: "setting-item-description", attr: { "aria-live": "polite" } });
-        this.errorEl = this.contentEl.createEl("p", { cls: "wfo-create-error", attr: { role: "alert" } });
-        new Setting(this.contentEl).setClass("wfo-create-actions")
+        this.errorEl = this.contentEl.createEl("p", { cls: "tnw-create-error", attr: { role: "alert" } });
+        new Setting(this.contentEl).setClass("tnw-create-actions")
             .addButton(button => {
                 this.createButton = button.setButtonText(this.options.submitLabel).setCta().onClick(() => { void this.submit(); });
             })
@@ -58,16 +58,16 @@ export class ObjectFieldsModal<Result> extends Modal {
         this.contentEl.querySelector<HTMLTextAreaElement>("textarea")?.focus();
     }
 
-    private renderFields(parent: HTMLElement, fields: ObjectField[]): void {
+    private renderFields(parent: HTMLElement, fields: TypedNoteField[]): void {
         for (const field of fields) {
             const { definition, kind } = field;
             const options = fieldOptions(definition);
-            const section = parent.createDiv({ cls: "wfo-create-field" });
+            const section = parent.createDiv({ cls: "tnw-create-field" });
             const row = new Setting(section).setName(definition.name);
             if (field.hint.trim()) row.setDesc(field.hint);
             const changed = (): void => { field.dirty = true; this.refreshPreview(); };
             if (field.raw) {
-                row.settingEl.addClass("wfo-create-text-field");
+                row.settingEl.addClass("tnw-create-text-field");
                 row.setDesc("Existing value does not match the new field type. Edit as JSON, or switch to the schema input.");
                 row.addTextArea(text => {
                     text.inputEl.rows = 3;
@@ -84,13 +84,13 @@ export class ObjectFieldsModal<Result> extends Modal {
                     } finally { this.pendingEditors--; button.setDisabled(false); }
                 }));
             } else if (kind === "object" && field.children.length) {
-                this.renderFields(section.createDiv({ cls: "wfo-create-nested" }), field.children);
+                this.renderFields(section.createDiv({ cls: "tnw-create-nested" }), field.children);
             } else if (kind === "objectlist" && this.draft.fieldService.childDefinitions(field).length) {
-                const items = section.createDiv({ cls: "wfo-create-nested" });
+                const items = section.createDiv({ cls: "tnw-create-nested" });
                 const renderItems = (): void => {
                     items.empty();
                     field.items.forEach((item, index) => {
-                        const container = items.createDiv({ cls: "wfo-create-object-item" });
+                        const container = items.createDiv({ cls: "tnw-create-object-item" });
                         new Setting(container).setName(`Item ${index + 1}`).addButton(button => button.setButtonText("Remove item").onClick(() => {
                             field.items.splice(index, 1); renderItems(); changed();
                         }));
@@ -107,11 +107,11 @@ export class ObjectFieldsModal<Result> extends Modal {
                     } finally { this.pendingEditors--; button.setDisabled(false); }
                 }));
             } else if (isLinkField(field)) {
-                const selected = section.createEl("p", { cls: "wfo-create-links" });
+                const selected = section.createEl("p", { cls: "tnw-create-links" });
                 const display = (): void => selected.setText(field.links.map(item => item.display).join(", ") || "No files selected");
                 display();
                 row.addButton(button => button.setButtonText("Choose files").onClick(async () => {
-                    const links = await new ObjectFilePickerModal(this.app, field, this.draft.fieldService).openAndGetValue();
+                    const links = await new TypedNoteFilePickerModal(this.app, field, this.draft.fieldService).openAndGetValue();
                     if (links && !this.closed) { field.links = links; display(); changed(); }
                 })).addButton(button => button.setButtonText("Clear").onClick(() => { field.links = []; display(); changed(); }));
             } else if (kind === "boolean" || kind === "checkbox") {
@@ -135,13 +135,13 @@ export class ObjectFieldsModal<Result> extends Modal {
                     dropdown.setValue(field.text).onChange(value => { field.text = value; changed(); });
                 });
             } else if (kind === "multi" && field.choices.length) {
-                const choices = section.createDiv({ cls: "wfo-create-choices" });
+                const choices = section.createDiv({ cls: "tnw-create-choices" });
                 for (const value of field.choices) new Setting(choices).setName(value).addToggle(toggle => toggle.setValue(field.selectedChoices.includes(value)).onChange(checked => {
                     field.selectedChoices = checked ? [...field.selectedChoices, value] : field.selectedChoices.filter(item => item !== value);
                     changed();
                 }));
             } else {
-                row.settingEl.addClass("wfo-create-text-field");
+                row.settingEl.addClass("tnw-create-text-field");
                 if (isListField(field)) row.setDesc(`Enter values separated by commas or new lines.${field.hint ? ` ${field.hint}` : ""}`);
                 if (["object", "objectlist", "json"].includes(kind)) row.setDesc("Enter JSON. Nested values are saved as structured metadata.");
                 if (kind === "yaml") row.setDesc("Enter YAML. Nested values are saved as structured metadata.");
@@ -182,7 +182,7 @@ export class ObjectFieldsModal<Result> extends Modal {
             });
             text.inputEl.setAttribute("aria-label", "Filename");
         });
-        this.previewEl = this.formEl.createEl("p", { cls: "wfo-create-path", attr: { "aria-live": "polite" } });
+        this.previewEl = this.formEl.createEl("p", { cls: "tnw-create-path", attr: { "aria-live": "polite" } });
     }
 
     private refreshPreview(): void {

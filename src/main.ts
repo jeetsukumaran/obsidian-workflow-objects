@@ -1,13 +1,13 @@
 import { Plugin, Menu, TAbstractFile, TFile } from "obsidian";
-import { WorkflowObjectsSettings, DEFAULT_SETTINGS } from "./types";
-import { TypeService } from "./services/TypeService";
+import { TypedNoteWorkflowsSettings, DEFAULT_SETTINGS } from "./types";
+import { NoteTypeService } from "./services/NoteTypeService";
 import { FrontmatterService } from "./services/FrontmatterService";
-import { WorkflowObjectsSettingTab } from "./SettingsTab";
+import { TypedNoteWorkflowsSettingTab } from "./SettingsTab";
 import {
-    createNewWorkflowObject,
+    createNewTypedNote,
     navigateNext,
     navigatePrevious,
-    openWorkflowObject,
+    openTypedNote,
     sortFrontmatter,
     sortFrontmatterSchema,
     sortFrontmatterAlphabetical,
@@ -15,38 +15,38 @@ import {
     cleanFrontmatterInteractive,
     cleanFrontmatterStandard,
     cleanFrontmatterStrict,
-    reshelveWorkflowObject,
+    reshelveTypedNote,
     cleanWorkspace,
     curateVault,
-    createWorkflowObjectCatalog,
-    cloneObjectType,
-    renameType,
+    createTypedNoteCatalog,
+    cloneNoteType,
+    renameNoteType,
     copyFieldsFrom,
-    bulkAssignType,
-    assignObjectType,
+    bulkAssignNoteType,
+    assignNoteType,
 } from "./commands";
 
-export default class WorkflowObjectsPlugin extends Plugin {
-    settings: WorkflowObjectsSettings = DEFAULT_SETTINGS;
-    typeService!: TypeService;
+export default class TypedNoteWorkflowsPlugin extends Plugin {
+    settings: TypedNoteWorkflowsSettings = DEFAULT_SETTINGS;
+    noteTypeService!: NoteTypeService;
     private frontmatterService!: FrontmatterService;
 
     async onload(): Promise<void> {
         await this.loadSettings();
 
         // Initialize services
-        this.typeService = new TypeService(this.app, this.settings);
+        this.noteTypeService = new NoteTypeService(this.app, this.settings);
         this.frontmatterService = new FrontmatterService(
             this.app,
             this.settings,
-            this.typeService
+            this.noteTypeService
         );
 
         // Register commands
         this.registerCommands();
 
         // Add settings tab
-        this.addSettingTab(new WorkflowObjectsSettingTab(this.app, this));
+        this.addSettingTab(new TypedNoteWorkflowsSettingTab(this.app, this));
     }
 
     onunload(): void {
@@ -56,30 +56,30 @@ export default class WorkflowObjectsPlugin extends Plugin {
     private registerCommands(): void {
         // Create commands
         this.addCommand({
-            id: "create-new-workflow-object",
-            name: "Create new workflow object",
+            id: "create-new-typed-note",
+            name: "Create new typed note",
             callback: () =>
-                createNewWorkflowObject(this.app, this.settings, this.typeService),
+                createNewTypedNote(this.app, this.settings, this.noteTypeService),
         });
 
         // Navigation commands
         this.addCommand({
             id: "navigate-next",
-            name: "Navigate to next workflow object of same type",
-            callback: () => navigateNext(this.app, this.settings, this.typeService),
+            name: "Navigate to next typed note with matching note type",
+            callback: () => navigateNext(this.app, this.settings, this.noteTypeService),
         });
 
         this.addCommand({
             id: "navigate-previous",
-            name: "Navigate to previous workflow object of same type",
-            callback: () => navigatePrevious(this.app, this.settings, this.typeService),
+            name: "Navigate to previous typed note with matching note type",
+            callback: () => navigatePrevious(this.app, this.settings, this.noteTypeService),
         });
 
         this.addCommand({
-            id: "open-workflow-object",
-            name: "Open workflow object by type",
+            id: "open-typed-note",
+            name: "Open typed note by note type",
             callback: () =>
-                openWorkflowObject(this.app, this.settings, this.typeService),
+                openTypedNote(this.app, this.settings, this.noteTypeService),
         });
 
         // Frontmatter commands
@@ -139,7 +139,7 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 cleanFrontmatterInteractive(
                     this.app,
                     this.settings,
-                    this.typeService,
+                    this.noteTypeService,
                     this.frontmatterService
                 ),
         });
@@ -151,7 +151,7 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 cleanFrontmatterStandard(
                     this.app,
                     this.settings,
-                    this.typeService,
+                    this.noteTypeService,
                     this.frontmatterService
                 ),
         });
@@ -163,18 +163,18 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 cleanFrontmatterStrict(
                     this.app,
                     this.settings,
-                    this.typeService,
+                    this.noteTypeService,
                     this.frontmatterService
                 ),
         });
 
         this.addCommand({
-            id: "assign-object-to-different-type",
-            name: "Assign object to different type",
-            callback: () => assignObjectType(
+            id: "assign-note-type",
+            name: "Assign note type",
+            callback: () => assignNoteType(
                 this.app,
                 this.settings,
-                this.typeService,
+                this.noteTypeService,
                 this.frontmatterService,
                 async options => {
                     this.settings.typeAssignment = { ...options };
@@ -185,9 +185,9 @@ export default class WorkflowObjectsPlugin extends Plugin {
 
         // Storage commands
         this.addCommand({
-            id: "reshelve-workflow-object",
-            name: "Reshelve workflow object",
-            callback: () => reshelveWorkflowObject(this.app, this.settings, this.typeService, this.frontmatterService),
+            id: "reshelve-typed-note",
+            name: "Reshelve typed note",
+            callback: () => reshelveTypedNote(this.app, this.settings, this.noteTypeService, this.frontmatterService),
         });
 
         // Workspace commands
@@ -205,32 +205,32 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 curateVault(
                     this.app,
                     this.settings,
-                    this.typeService,
+                    this.noteTypeService,
                     this.frontmatterService
                 ),
         });
 
         // Catalog commands
         this.addCommand({
-            id: "create-workflow-object-catalog",
-            name: "Create new workflow object catalog",
+            id: "create-typed-note-catalog",
+            name: "Create typed note catalog",
             callback: () =>
-                createWorkflowObjectCatalog(this.app, this.settings, this.typeService),
+                createTypedNoteCatalog(this.app, this.settings, this.noteTypeService),
         });
 
         // Clone commands
         this.addCommand({
-            id: "clone-object-type",
-            name: "Clone object type",
+            id: "clone-note-type",
+            name: "Clone note type",
             callback: () =>
-                cloneObjectType(this.app, this.settings, this.typeService),
+                cloneNoteType(this.app, this.settings, this.noteTypeService),
         });
 
-        // Rename type command
+        // Rename note type command
         this.addCommand({
-            id: "rename-type",
-            name: "Rename type",
-            callback: () => renameType(this.app, this.settings, this.typeService,
+            id: "rename-note-type",
+            name: "Rename note type",
+            callback: () => renameNoteType(this.app, this.settings, this.noteTypeService,
                 this.frontmatterService, () => this.saveSettings()),
         });
 
@@ -239,18 +239,18 @@ export default class WorkflowObjectsPlugin extends Plugin {
             id: "copy-fields-from",
             name: "Copy fields from…",
             callback: () =>
-                copyFieldsFrom(this.app, this.settings, this.typeService),
+                copyFieldsFrom(this.app, this.settings, this.noteTypeService),
         });
 
         // Bulk assign commands
         this.addCommand({
-            id: "bulk-assign-type",
-            name: "Bulk assign object type",
+            id: "bulk-assign-note-type",
+            name: "Bulk assign note type",
             callback: () =>
-                bulkAssignType(
+                bulkAssignNoteType(
                     this.app,
                     this.settings,
-                    this.typeService,
+                    this.noteTypeService,
                     this.frontmatterService
                 ),
         });
@@ -261,10 +261,10 @@ export default class WorkflowObjectsPlugin extends Plugin {
                 "file-menu",
                 (menu: Menu, file: TAbstractFile) => {
                     if (!(file instanceof TFile)) return;
-                    if (!this.typeService.isTypeDefinitionFile(file)) return;
+                    if (!this.noteTypeService.isNoteTypeDefinitionFile(file)) return;
                     menu.addSeparator();
-                    menu.addItem(item => item.setTitle("Rename type").setIcon("pencil").setSection("action")
-                        .onClick(() => renameType(this.app, this.settings, this.typeService,
+                    menu.addItem(item => item.setTitle("Rename note type").setIcon("pencil").setSection("action")
+                        .onClick(() => renameNoteType(this.app, this.settings, this.noteTypeService,
                             this.frontmatterService, () => this.saveSettings(), file)));
                     menu.addItem((item) =>
                         item
@@ -275,7 +275,7 @@ export default class WorkflowObjectsPlugin extends Plugin {
                                 copyFieldsFrom(
                                     this.app,
                                     this.settings,
-                                    this.typeService,
+                                    this.noteTypeService,
                                     file
                                 )
                             )
@@ -286,8 +286,14 @@ export default class WorkflowObjectsPlugin extends Plugin {
     }
 
     async loadSettings(): Promise<void> {
-        const loaded = await this.loadData();
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
+        // Normalize the legacy key once; consumers and subsequent saves use the new key.
+        const { objectSortDirection: legacySortDirection, ...loaded } = await this.loadData() ?? {};
+        const savedSortDirection: unknown = loaded.typedNoteSortDirection;
+        const typedNoteSortDirection = savedSortDirection === "asc" || savedSortDirection === "desc"
+            ? savedSortDirection
+            : legacySortDirection === "asc" || legacySortDirection === "desc"
+                ? legacySortDirection : DEFAULT_SETTINGS.typedNoteSortDirection;
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded, { typedNoteSortDirection });
         this.settings.typeAssignment = {
             ...DEFAULT_SETTINGS.typeAssignment,
             ...loaded?.typeAssignment,
@@ -327,11 +333,11 @@ export default class WorkflowObjectsPlugin extends Plugin {
         await this.saveData(this.settings);
 
         // Update services with new settings
-        this.typeService = new TypeService(this.app, this.settings);
+        this.noteTypeService = new NoteTypeService(this.app, this.settings);
         this.frontmatterService = new FrontmatterService(
             this.app,
             this.settings,
-            this.typeService
+            this.noteTypeService
         );
     }
 }

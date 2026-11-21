@@ -7,7 +7,7 @@ import { build } from "esbuild";
 const require = createRequire(import.meta.url);
 const bundleSource = (await build({
     stdin: {
-        contents: 'export { default } from "./src/main"; export { BulkAssignTypeModal } from "./src/modals/BulkAssignTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal"; export { VaultCurationModal } from "./src/modals/VaultCurationModal"; export { ObjectFieldsModal } from "./src/modals/ObjectFieldsModal";',
+        contents: 'export { default } from "./src/main"; export { BulkAssignNoteTypeModal } from "./src/modals/BulkAssignNoteTypeModal"; export { BulkAssignPreviewModal } from "./src/modals/BulkAssignPreviewModal"; export { StringSuggesterModal } from "./src/modals/SuggesterModal"; export { ConfirmModal } from "./src/modals/ConfirmModal"; export { InputModal } from "./src/modals/InputModal"; export { VaultCurationModal } from "./src/modals/VaultCurationModal"; export { TypedNoteFieldsModal } from "./src/modals/TypedNoteFieldsModal";',
         resolveDir: fileURLToPath(new URL("../../", import.meta.url)),
     },
     bundle: true, packages: "external", platform: "node", format: "cjs", write: false,
@@ -76,9 +76,9 @@ export async function assignmentHost({
     }
     class TFolder { constructor(folderPath) { this.path = folderPath; this.children = []; } }
     const file = new TFile(path);
-    const typeFiles = Object.keys(schemas).map(name => new TFile(`types/${name}.md`));
+    const noteTypeFiles = Object.keys(schemas).map(name => new TFile(`types/${name}.md`));
     const existing = new Map([["types", new TFolder("types")], ["inbox", new TFolder("inbox")]]);
-    for (const type of typeFiles) existing.set(type.path, type);
+    for (const noteTypeFile of noteTypeFiles) existing.set(noteTypeFile.path, noteTypeFile);
     for (const path of Object.keys(extraFiles)) existing.set(path, new TFile(path));
     if (collision) existing.set(collision, new TFile(collision));
     const rootFolder = new TFolder("");
@@ -88,7 +88,7 @@ export async function assignmentHost({
         workspace: { activeEditor: { editor: { getSelection: () => selection } }, getActiveFile: () => active ? file : null, on: () => ({}), getLeaf: () => ({ openFile: async target => opened.push(target.path) }) },
         vault: {
             getAbstractFileByPath: name => name === file.path ? file : existing.get(name) ?? null,
-            getMarkdownFiles: () => [...typeFiles, file],
+            getMarkdownFiles: () => [...noteTypeFiles, file],
             getFiles: () => [...existing.values()].filter(item => item instanceof TFile).concat(file),
             getRoot: () => rootFolder,
             async read(target) {
@@ -224,10 +224,10 @@ export async function assignmentHost({
     );
     let plugin = new module.exports.default();
     await plugin.onload();
-    const openEditor = module.exports.ObjectFieldsModal.prototype.openAndSave;
-    module.exports.ObjectFieldsModal.prototype.openAndSave = function () {
+    const openEditor = module.exports.TypedNoteFieldsModal.prototype.openAndSave;
+    module.exports.TypedNoteFieldsModal.prototype.openAndSave = function () {
         // Policy/relocation tests submit the unchanged draft; editor tests exercise the actual UI.
-        return !interactiveAssignment && this.options.submitLabel === "Assign type" ? this.draft.save() : openEditor.call(this);
+        return !interactiveAssignment && this.options.submitLabel === "Assign note type" ? this.draft.save() : openEditor.call(this);
     };
     return {
         file, app, notices, errors, writes, renames, folders, saves, modals, body, created, opened, classes: module.exports,
@@ -237,8 +237,8 @@ export async function assignmentHost({
         changeFrontmatter(value) { current = clone(value); },
         async reload() { plugin = new module.exports.default(); await plugin.onload(); },
         open() {
-            const command = plugin.commands.get("assign-object-to-different-type");
-            assert.equal(command?.name, "Assign object to different type");
+            const command = plugin.commands.get("assign-note-type");
+            assert.equal(command?.name, "Assign note type");
             const completion = command.callback();
             const modal = modals.at(-1);
             const row = name => modal.contentEl.rows.find(item => item.name === name);

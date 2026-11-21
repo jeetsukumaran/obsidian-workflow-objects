@@ -23,7 +23,7 @@ async function until(check) {
 async function open(options = {}) {
     const env = await assignmentHost({ source: "fileclass", schemas: { project: { fields: [] } }, runtime, ...options });
     env.classes.StringSuggesterModal.prototype.openAndGetValue = async () => "project";
-    const completion = env.plugin.commands.get("create-new-workflow-object").callback();
+    const completion = env.plugin.commands.get("create-new-typed-note").callback();
     await until(() => env.modals.length || env.errors.length);
     assert.deepEqual(env.errors, []);
     const modal = env.modals.at(-1);
@@ -32,7 +32,7 @@ async function open(options = {}) {
 }
 
 async function submit(modal) {
-    click(modal, "Create object");
+    click(modal, "Create typed note");
     await until(() => !modal.saving);
 }
 
@@ -112,7 +112,7 @@ test("FileClass date-link formats and provider defaults preserve picker values",
             dateFormat: "YYYY-MM-DD ddd", defaultInsertAsLink: "true", dateLinkPath: "Daily/{{YYYY}}/{{MM}}", dateLinkAlias: true,
         } }), field("time", "Time")] } },
     });
-    control(modal, "title").change("Date object");
+    control(modal, "title").change("Date typed note");
     control(modal, "daily").change("2025-01-02");
     control(modal, "time").change("15:45");
     await submit(modal); await completion;
@@ -168,7 +168,7 @@ test("file pickers preserve Base group order, display aliases, and links relativ
     await until(() => env.modals.at(-1).items?.length === 2);
     const picker = env.modals.at(-1);
     assert.deepEqual(picker.items.map(item => item.file.path), ["refs/z.md", "refs/a.md"]);
-    assert.match(picker.statusEl.text, /unsaved object/);
+    assert.match(picker.statusEl.text, /unsaved typed note/);
     control(picker, "First name").change(true);
     control(picker, "Last name").change(true);
     click(picker, "Use selected files");

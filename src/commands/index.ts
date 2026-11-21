@@ -1,12 +1,12 @@
 export {
-    createNewWorkflowObject,
-} from "./CreateWorkflowObjectCommand";
+    createNewTypedNote,
+} from "./CreateTypedNoteCommand";
 
 export {
     navigate,
     navigateNext,
     navigatePrevious,
-    openWorkflowObject,
+    openTypedNote,
 } from "./NavigateCommand";
 
 export {
@@ -18,7 +18,7 @@ export {
     cleanFrontmatterStrict,
 } from "./CleanupCommand";
 
-export { reshelveWorkflowObject } from "./ReshelveCommand";
+export { reshelveTypedNote } from "./ReshelveCommand";
 
 export { insertMissingFrontmatter } from "./InsertMissingFrontmatterCommand";
 
@@ -26,14 +26,14 @@ export { curateVault } from "./VaultCurationCommand";
 
 export { cleanWorkspace } from "./WorkspaceCommand";
 
-export { createWorkflowObjectCatalog } from "./CreateCatalogCommand";
+export { createTypedNoteCatalog } from "./CreateCatalogCommand";
 
-export { cloneObjectType } from "./CloneObjectTypeCommand";
+export { cloneNoteType } from "./CloneNoteTypeCommand";
 
-export { renameType } from "./RenameTypeCommand";
+export { renameNoteType } from "./RenameNoteTypeCommand";
 
 export { copyFieldsFrom } from "./CopyFieldsFromCommand";
 
-export { bulkAssignType } from "./BulkAssignTypeCommand";
+export { bulkAssignNoteType } from "./BulkAssignNoteTypeCommand";
 
-export { assignObjectType } from "./AssignObjectTypeCommand";
+export { assignNoteType } from "./AssignNoteTypeCommand";

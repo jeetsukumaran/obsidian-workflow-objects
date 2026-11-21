@@ -1,17 +1,17 @@
 import { App, Modal, Setting } from "obsidian";
-import { TypeAssignmentOptions } from "../types";
+import { NoteTypeAssignmentOptions } from "../types";
 
-/** Options for assigning the active object to a selected type. */
-export class AssignObjectTypeModal extends Modal {
-    private options: TypeAssignmentOptions;
+/** Options for assigning the active note to a selected note type. */
+export class AssignNoteTypeModal extends Modal {
+    private options: NoteTypeAssignmentOptions;
     private submitted = false;
-    private onSubmit: ((options: TypeAssignmentOptions | null) => void) | null = null;
+    private onSubmit: ((options: NoteTypeAssignmentOptions | null) => void) | null = null;
 
     constructor(
         app: App,
-        private typeNames: string[],
+        private noteTypeNames: string[],
         private filePath: string,
-        defaults: TypeAssignmentOptions
+        defaults: NoteTypeAssignmentOptions
     ) {
         super(app);
         this.options = { ...defaults };
@@ -20,14 +20,14 @@ export class AssignObjectTypeModal extends Modal {
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl("h2", { text: "Assign object to different type" });
+        contentEl.createEl("h2", { text: "Assign note type" });
         contentEl.createEl("p", { text: this.filePath, cls: "setting-item-description" });
 
         new Setting(contentEl)
-            .setName("New object type")
-            .setDesc("Select a content type from the type definitions folder.")
+            .setName("New note type")
+            .setDesc("Select a note type from the note type definitions folder.")
             .addDropdown(dropdown => {
-                for (const name of this.typeNames) dropdown.addOption(name, name);
+                for (const name of this.noteTypeNames) dropdown.addOption(name, name);
                 dropdown.setValue(this.options.targetType).onChange(value => { this.options.targetType = value; });
             });
 
@@ -36,7 +36,7 @@ export class AssignObjectTypeModal extends Modal {
         let reshelveRow: Setting;
         new Setting(contentEl)
             .setName("Update file location")
-            .setDesc("Enable automatic renaming and moving using the new object type.")
+            .setDesc("Enable automatic renaming and moving using the new note type.")
             .addToggle(toggle => toggle.setValue(this.options.updateFileLocation).onChange(value => {
                 this.options.updateFileLocation = value;
                 renameRow.setDisabled(!value);
@@ -49,7 +49,7 @@ export class AssignObjectTypeModal extends Modal {
             .setDisabled(!this.options.updateFileLocation);
         reshelveRow = new Setting(contentEl)
             .setName("Auto-reshelve")
-            .setDesc("Move to the folder determined by the new type's path rules. Keep the filename unless auto-rename is enabled.")
+            .setDesc("Move to the folder determined by the new note type's path rules. Keep the filename unless auto-rename is enabled.")
             .addToggle(toggle => toggle.setValue(this.options.autoReshelve).onChange(value => { this.options.autoReshelve = value; }))
             .setDisabled(!this.options.updateFileLocation);
 
@@ -60,13 +60,13 @@ export class AssignObjectTypeModal extends Modal {
             .addToggle(toggle => toggle.setValue(this.options.addMissingFields).onChange(value => { this.options.addMissingFields = value; }));
         new Setting(contentEl)
             .setName("Remove fields outside the new schema")
-            .setDesc("Keep fields required by inherited and contextual classes. The type field and tags that bind classes are retained.")
+            .setDesc("Keep fields required by inherited and contextual classes. The note type field and tags that bind classes are retained.")
             .addDropdown(dropdown => dropdown
                 .addOption("empty", "Only if empty")
                 .addOption("all", "Even if not empty")
                 .addOption("never", "Never: preserve all fields")
                 .setValue(this.options.removeFields)
-                .onChange(value => { this.options.removeFields = value as TypeAssignmentOptions["removeFields"]; }));
+                .onChange(value => { this.options.removeFields = value as NoteTypeAssignmentOptions["removeFields"]; }));
 
         let positionRow: Setting;
         new Setting(contentEl)
@@ -77,7 +77,7 @@ export class AssignObjectTypeModal extends Modal {
                 .addOption("none", "Do not sort")
                 .setValue(this.options.sortMode)
                 .onChange(value => {
-                    this.options.sortMode = value as TypeAssignmentOptions["sortMode"];
+                    this.options.sortMode = value as NoteTypeAssignmentOptions["sortMode"];
                     positionRow.settingEl.toggle(value === "none");
                 }));
         positionRow = new Setting(contentEl)
@@ -87,12 +87,12 @@ export class AssignObjectTypeModal extends Modal {
                 .addOption("append", "Appended")
                 .addOption("prepend", "Prepended")
                 .setValue(this.options.newFieldsPosition)
-                .onChange(value => { this.options.newFieldsPosition = value as TypeAssignmentOptions["newFieldsPosition"]; }));
+                .onChange(value => { this.options.newFieldsPosition = value as NoteTypeAssignmentOptions["newFieldsPosition"]; }));
         positionRow.settingEl.toggle(this.options.sortMode === "none");
 
         new Setting(contentEl)
             .addButton(button => button.setButtonText("Review fields").setCta().onClick(() => {
-                if (!this.typeNames.includes(this.options.targetType)) return;
+                if (!this.noteTypeNames.includes(this.options.targetType)) return;
                 this.submitted = true;
                 this.close();
             }))
@@ -108,7 +108,7 @@ export class AssignObjectTypeModal extends Modal {
         }
     }
 
-    openAndGetValue(): Promise<TypeAssignmentOptions | null> {
+    openAndGetValue(): Promise<NoteTypeAssignmentOptions | null> {
         return new Promise(resolve => {
             this.onSubmit = resolve;
             this.open();

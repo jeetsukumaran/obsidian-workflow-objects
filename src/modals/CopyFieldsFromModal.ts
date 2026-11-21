@@ -5,7 +5,7 @@ import { generateFieldId } from "../utils/fieldUtils";
 // ── Internal data model ────────────────────────────────────────────────────
 
 interface FieldEntry {
-    /** Original name in the source type */
+    /** Original name in the source note type */
     readonly sourceName: string;
     /** Editable name; defaults to sourceName */
     displayName: string;
@@ -38,9 +38,9 @@ export interface CopyFieldsResult {
 
 /**
  * Modal for "Copy fields from …" — copies a subset of fields from a source
- * type into a target type that already exists.
+ * type into a target note type that already exists.
  *
- * Differences from {@link CloneObjectTypeModal}:
+ * Differences from {@link CloneNoteTypeModal}:
  *  - No name input (the target already has a name).
  *  - Fields that already exist in the target are shown with an "overwrite"
  *    badge and default to **unchecked**; the user must explicitly opt in to
@@ -107,7 +107,7 @@ export class CopyFieldsFromModal extends Modal {
             cls: "copy-fields-overwrite-badge copy-fields-overwrite-badge--inline",
             text: "overwrite",
         });
-        overwriteSpan.setAttr("title", "This field already exists in the target type");
+        overwriteSpan.setAttr("title", "This field already exists in the target note type");
         legendEl.createSpan({ text: " fields already exist in the target and are unchecked by default — check to replace them." });
 
         this.fieldListEl = contentEl.createDiv({ cls: "clone-field-list" });
@@ -294,7 +294,7 @@ export class CopyFieldsFromModal extends Modal {
                 }
             });
 
-            // ── Type badge ───────────────────────────────────────────────────
+            // ── Field type badge ───────────────────────────────────────────────────
             rowEl.createSpan({
                 cls: "clone-field-type-badge",
                 text: entry.type,
@@ -306,7 +306,7 @@ export class CopyFieldsFromModal extends Modal {
                     cls: "copy-fields-overwrite-badge",
                     text: "overwrite",
                 });
-                badge.setAttr("title", "This field already exists in the target type. Check to replace its definition.");
+                badge.setAttr("title", "This field already exists in the target note type. Check to replace its definition.");
             }
         }
     }

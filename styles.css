@@ -1,27 +1,27 @@
-/* Workflow Objects Plugin Styles */
+/* Typed Note Workflows plugin styles */
 
 /* Type rename dialog */
-.wfo-rename-type-status {
+.tnw-rename-note-type-status {
     overflow-wrap: anywhere;
 }
 
-.wfo-rename-type-modal input {
+.tnw-rename-note-type-modal input {
     max-width: 100%;
 }
 
 @media (max-width: 600px) {
-    .wfo-rename-type-modal .setting-item {
+    .tnw-rename-note-type-modal .setting-item {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .wfo-rename-type-modal .setting-item-control {
+    .tnw-rename-note-type-modal .setting-item-control {
         flex-wrap: wrap;
     }
 }
 
 /* Confirmation modal message formatting */
-.workflow-objects-confirm-message {
+.tnw-confirm-message {
     white-space: pre-wrap;
     margin-bottom: 1em;
     padding: 0.5em;
@@ -166,16 +166,16 @@
     background: var(--background-modifier-hover);
 }
 
-/* ── Clone Object Type Modal ─────────────────────────────────────────────── */
+/* ── Clone note type Modal ─────────────────────────────────────────────── */
 
-.clone-object-type-modal .clone-source-label {
+.clone-note-type-modal .clone-source-label {
     color: var(--text-muted);
     font-size: 0.85em;
     margin-top: -0.5em;
     margin-bottom: 1em;
 }
 
-.clone-object-type-modal .clone-field-hint {
+.clone-note-type-modal .clone-field-hint {
     color: var(--text-muted);
     font-size: 0.85em;
     margin-bottom: 0.5em;
@@ -244,7 +244,7 @@
 
 /* Hidden utility */
 .clone-name-error.is-hidden,
-.wfo-hidden {
+.tnw-hidden {
     display: none;
 }
 
@@ -307,14 +307,14 @@
 /* ── Bulk Assign Type Preview Modal ──────────────────────────────────────── */
 
 /* Summary line above the file list */
-.wfo-bulk-preview-summary {
+.tnw-bulk-preview-summary {
     color: var(--text-muted);
     font-size: 0.9em;
     margin-bottom: 0.5em;
 }
 
 /* Scrollable file list */
-.wfo-bulk-preview-list {
+.tnw-bulk-preview-list {
     max-height: 380px;
     overflow-y: auto;
     margin-bottom: 1em;
@@ -324,7 +324,7 @@
 }
 
 /* Each file row */
-.wfo-bulk-preview-row {
+.tnw-bulk-preview-row {
     display: flex;
     align-items: baseline;
     gap: 8px;
@@ -333,16 +333,16 @@
     transition: background 60ms ease;
 }
 
-.wfo-bulk-preview-row:last-child {
+.tnw-bulk-preview-row:last-child {
     border-bottom: none;
 }
 
-.wfo-bulk-preview-row:hover {
+.tnw-bulk-preview-row:hover {
     background: var(--background-modifier-hover);
 }
 
 /* Checkbox */
-.wfo-bulk-preview-checkbox {
+.tnw-bulk-preview-checkbox {
     flex-shrink: 0;
     width: 15px;
     height: 15px;
@@ -352,7 +352,7 @@
 }
 
 /* File path */
-.wfo-bulk-preview-path {
+.tnw-bulk-preview-path {
     flex: 1;
     font-size: 0.88em;
     color: var(--text-normal);
@@ -361,7 +361,7 @@
 }
 
 /* Current-type annotation ("← article") shown when a file already has a type */
-.wfo-bulk-preview-current-type {
+.tnw-bulk-preview-current-note-type {
     flex-shrink: 0;
     font-size: 0.78em;
     color: var(--text-faint);
@@ -369,64 +369,64 @@
     white-space: nowrap;
 }
 /* Schema-driven creation form. */
-.wfo-create-modal {
+.tnw-create-modal {
     width: min(720px, 94vw);
 }
 
-.wfo-create-modal .wfo-create-form {
+.tnw-create-modal .tnw-create-form {
     border: 0;
     padding: 0;
     margin: 0;
     min-width: 0;
 }
 
-.wfo-create-modal .wfo-create-type,
-.wfo-create-modal .wfo-create-links {
+.tnw-create-modal .tnw-create-note-type,
+.tnw-create-modal .tnw-create-links {
     color: var(--text-muted);
     overflow-wrap: anywhere;
 }
 
-.wfo-create-modal .wfo-create-field {
+.tnw-create-modal .tnw-create-field {
     border-top: 1px solid var(--background-modifier-border);
 }
 
-.wfo-create-modal .wfo-create-field > .setting-item {
+.tnw-create-modal .tnw-create-field > .setting-item {
     border-top: 0;
 }
 
-.wfo-create-modal .wfo-create-text-field {
+.tnw-create-modal .tnw-create-text-field {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
 }
 
-.wfo-create-modal .wfo-create-text-field .setting-item-control,
-.wfo-create-modal .wfo-create-text-field textarea {
+.tnw-create-modal .tnw-create-text-field .setting-item-control,
+.tnw-create-modal .tnw-create-text-field textarea {
     width: 100%;
 }
 
-.wfo-create-modal .wfo-create-text-field .setting-item-control {
+.tnw-create-modal .tnw-create-text-field .setting-item-control {
     flex-wrap: wrap;
 }
 
-.wfo-create-modal textarea {
+.tnw-create-modal textarea {
     resize: vertical;
     min-height: 72px;
 }
 
-.wfo-create-modal input,
-.wfo-create-modal select {
+.tnw-create-modal input,
+.tnw-create-modal select {
     max-width: 100%;
 }
 
-.wfo-create-modal .wfo-create-nested,
-.wfo-create-modal .wfo-create-choices {
+.tnw-create-modal .tnw-create-nested,
+.tnw-create-modal .tnw-create-choices {
     border-left: 2px solid var(--background-modifier-border);
     padding-left: 16px;
     margin-bottom: 16px;
 }
 
-.wfo-create-modal .wfo-create-path {
+.tnw-create-modal .tnw-create-path {
     padding: 12px;
     background: var(--background-secondary);
     border-radius: var(--radius-s);
@@ -435,21 +435,21 @@
     font-size: var(--font-smaller);
 }
 
-.wfo-create-modal .wfo-create-error {
+.tnw-create-modal .tnw-create-error {
     color: var(--text-error);
     overflow-wrap: anywhere;
 }
 
-.wfo-create-modal .wfo-create-error:empty {
+.tnw-create-modal .tnw-create-error:empty {
     display: none;
 }
 
-.wfo-create-modal .wfo-create-file-list {
+.tnw-create-modal .tnw-create-file-list {
     max-height: 50vh;
     overflow-y: auto;
 }
 
-.wfo-create-modal .wfo-create-actions {
+.tnw-create-modal .tnw-create-actions {
     position: sticky;
     bottom: 0;
     background: var(--background-primary);
@@ -457,12 +457,12 @@
 }
 
 @media (max-width: 600px) {
-    .wfo-create-modal .setting-item {
+    .tnw-create-modal .setting-item {
         flex-wrap: wrap;
         gap: 10px;
     }
 
-    .wfo-create-modal .setting-item-control {
+    .tnw-create-modal .setting-item-control {
         max-width: 100%;
         flex-wrap: wrap;
     }

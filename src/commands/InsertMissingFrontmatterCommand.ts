@@ -23,7 +23,7 @@ export async function insertMissingFrontmatter(
             `Added ${added} missing front matter field(s)${sorted ? "; sorted front matter" : ""}`
         );
     } catch (error) {
-        console.error("Workflow Objects: Error inserting missing front matter", error);
+        console.error("Typed Note Workflows: Error inserting missing front matter", error);
         new Notice(
             `Error inserting missing front matter: ${error instanceof Error ? error.message : String(error)}`
         );

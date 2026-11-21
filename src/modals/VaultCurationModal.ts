@@ -1,5 +1,5 @@
 import { App, Modal, Setting, TFolder } from "obsidian";
-import { WorkflowObjectsSettings } from "../types";
+import { TypedNoteWorkflowsSettings } from "../types";
 
 /**
  * Options collected from the vault curation modal
@@ -35,7 +35,7 @@ export class VaultCurationModal extends Modal {
 
     constructor(
         app: App,
-        private settings: WorkflowObjectsSettings,
+        private settings: TypedNoteWorkflowsSettings,
         defaults?: Partial<VaultCurationOptions>
     ) {
         super(app);
@@ -72,7 +72,7 @@ export class VaultCurationModal extends Modal {
                     .setValue(this.options.directory);
 
                 // Attach a datalist for autocomplete
-                const listId = "wfo-vault-folder-list";
+                const listId = "tnw-vault-folder-list";
                 const datalist = text.inputEl.createEl("datalist" as keyof HTMLElementTagNameMap);
                 datalist.id = listId;
                 for (const name of folderNames) {
@@ -183,7 +183,7 @@ export class VaultCurationModal extends Modal {
         // Reshelve
         new Setting(contentEl)
             .setName("Reshelve files")
-            .setDesc("Move / rename files to match their type and title")
+            .setDesc("Move / rename files to match their note type and title")
             .addToggle((toggle) =>
                 toggle.setValue(this.options.runReshelve).onChange((v) => {
                     this.options.runReshelve = v;

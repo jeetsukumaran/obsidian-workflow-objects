@@ -8,14 +8,14 @@ export interface FileCandidate {
     group?: string | null;
 }
 
-export interface ObjectField {
+export interface TypedNoteField {
     definition: FieldDefinition;
     kind: string;
     text: string;
     checked: boolean;
     links: FileCandidate[];
-    children: ObjectField[];
-    items: ObjectField[][];
+    children: TypedNoteField[];
+    items: TypedNoteField[][];
     choices: string[];
     selectedChoices: string[];
     hint: string;
@@ -40,9 +40,9 @@ function textOption(field: FieldDefinition, key: string): string | undefined {
     return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export function isLinkField(field: ObjectField): boolean { return LINK_TYPES.has(field.kind); }
-export function isListField(field: ObjectField): boolean { return LIST_TYPES.has(field.kind); }
-export function fieldChanged(field: ObjectField): boolean {
+export function isLinkField(field: TypedNoteField): boolean { return LINK_TYPES.has(field.kind); }
+export function isListField(field: TypedNoteField): boolean { return LIST_TYPES.has(field.kind); }
+export function fieldChanged(field: TypedNoteField): boolean {
     return field.dirty || field.children.some(fieldChanged) || field.items.some(item => item.some(fieldChanged));
 }
 
@@ -55,7 +55,7 @@ export function inferredField(name: string, value: unknown): FieldDefinition {
 }
 
 /** Typed draft values and FileClass's choices/link conventions, without writing a note. */
-export class ObjectFieldService {
+export class TypedNoteFieldService {
     constructor(
         private app: App,
         private definitions: FieldDefinition[],
@@ -64,10 +64,10 @@ export class ObjectFieldService {
         private contextFilePath?: string
     ) {}
 
-    async makeFields(definitions: FieldDefinition[], existing: Record<string, unknown> = {}): Promise<ObjectField[]> {
+    async makeFields(definitions: FieldDefinition[], existing: Record<string, unknown> = {}): Promise<TypedNoteField[]> {
         return Promise.all(definitions.map(async definition => {
             const kind = definition.type.toLowerCase();
-            const field: ObjectField = {
+            const field: TypedNoteField = {
                 definition, kind, text: "", checked: false, links: [], children: [], items: [], choices: [], selectedChoices: [], hint: "", dirty: false,
             };
             if (DATE_FORMATS[kind]) field.text = moment(this.now).format(DATE_FORMATS[kind]);
@@ -78,7 +78,7 @@ export class ObjectFieldService {
                 try { field.choices = await this.choices(definition); }
                 catch (error) { field.hint = `Choices unavailable: ${error instanceof Error ? error.message : String(error)}. Enter values below.`; }
                 if (textOption(definition, "sourceType") === "ValuesFromBase") {
-                    field.hint += this.contextFilePath ? " Base filters use the saved note's values, not unsaved edits." : " Base filters using 'this' cannot see this unsaved object.";
+                    field.hint += this.contextFilePath ? " Base filters use the saved note's values, not unsaved edits." : " Base filters using 'this' cannot see this unsaved typed note.";
                 }
             }
             if (Object.prototype.hasOwnProperty.call(existing, definition.name)) await this.hydrate(field, existing[definition.name]);
@@ -88,7 +88,7 @@ export class ObjectFieldService {
 
     setDefinitions(definitions: FieldDefinition[]): void { this.definitions = definitions; }
 
-    private async hydrate(field: ObjectField, value: unknown): Promise<void> {
+    private async hydrate(field: TypedNoteField, value: unknown): Promise<void> {
         field.initial = { value };
         if (value == null || value === "") { field.text = ""; return; }
         const { kind } = field;
@@ -150,14 +150,14 @@ export class ObjectFieldService {
         if (!compatible) { field.raw = true; field.text = JSON.stringify(value, null, 2); }
     }
 
-    childDefinitions(field: ObjectField): FieldDefinition[] {
+    childDefinitions(field: TypedNoteField): FieldDefinition[] {
         const { id, path } = field.definition;
         if (!id) return [];
         const childPath = path ? `${path}____${id}` : id;
         return this.definitions.filter(child => child.path === childPath);
     }
 
-    makeChildren(field: ObjectField): Promise<ObjectField[]> {
+    makeChildren(field: TypedNoteField): Promise<TypedNoteField[]> {
         return this.makeFields(this.childDefinitions(field));
     }
 
@@ -187,7 +187,7 @@ export class ObjectFieldService {
             .map(value => String(value));
     }
 
-    async candidates(field: ObjectField, allFiles = false): Promise<{ items: FileCandidate[]; message: string }> {
+    async candidates(field: TypedNoteField, allFiles = false): Promise<{ items: FileCandidate[]; message: string }> {
         const definition = field.definition;
         const base = textOption(definition, "baseFile");
         let message = "";
@@ -202,7 +202,7 @@ export class ObjectFieldService {
                     });
                     return {
                         items: result.groups ? result.groups.flatMap(group => group.rows.map(row => candidate(row, group.key))) : result.rows.map(row => candidate(row)),
-                        message: `Source: ${base}. ${this.contextFilePath ? "Filters use the saved note's values, not unsaved edits." : "Filters using 'this' cannot see this unsaved object."} Use “Show all files” if needed.`,
+                        message: `Source: ${base}. ${this.contextFilePath ? "Filters use the saved note's values, not unsaved edits." : "Filters using 'this' cannot see this unsaved typed note."} Use “Show all files” if needed.`,
                     };
                 } catch (error) {
                     message = `Could not read ${base}: ${error instanceof Error ? error.message : String(error)}. Showing all files.`;
@@ -218,11 +218,11 @@ export class ObjectFieldService {
         };
     }
 
-    values(fields: ObjectField[], sourcePath: string, validate = true): Record<string, unknown> {
+    values(fields: TypedNoteField[], sourcePath: string, validate = true): Record<string, unknown> {
         return Object.fromEntries(fields.map(field => [field.definition.name, this.value(field, sourcePath, validate)]));
     }
 
-    private value(field: ObjectField, sourcePath: string, validate: boolean): unknown {
+    private value(field: TypedNoteField, sourcePath: string, validate: boolean): unknown {
         const { kind, text, definition } = field;
         const options = fieldOptions(definition);
         if (field.initial && !fieldChanged(field)) return field.initial.value;

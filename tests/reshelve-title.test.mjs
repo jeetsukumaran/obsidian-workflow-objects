@@ -5,12 +5,12 @@ import { assignmentHost as host } from "./helpers/assignment-host.mjs";
 const assignmentHost = options => host({ interactiveAssignment: true, ...options });
 
 const frontmatter = { fileClass: "project", created: "2024-01-02T03:04:00", keep: ["Existing value"] };
-const reshelve = env => env.plugin.commands.get("reshelve-workflow-object").callback();
+const reshelve = env => env.plugin.commands.get("reshelve-typed-note").callback();
 
 async function openPrompt(env, completion = reshelve(env)) {
     await new Promise(resolve => setImmediate(resolve));
     const modal = env.modals.at(-1);
-    if (modal instanceof env.classes.ObjectFieldsModal) {
+    if (modal instanceof env.classes.TypedNoteFieldsModal) {
         const allRows = el => [...el.rows, ...el.children.flatMap(allRows)];
         const controls = allRows(modal.contentEl);
         const input = controls.find(row => row.name === env.plugin.settings.fields.title).controls[0];
@@ -127,12 +127,12 @@ test("vault curation also prompts before reshelving a note without a title", asy
 
 function startAssignment(env, bulk) {
     if (!bulk) return env.assign();
-    env.classes.BulkAssignTypeModal.prototype.openAndGetValue = async () => ({
+    env.classes.BulkAssignNoteTypeModal.prototype.openAndGetValue = async () => ({
         targetType: "project", directory: "inbox", recursive: true, includePattern: "", excludePattern: "",
         runClean: true, cleanMode: "strict", runSort: true, sortMode: "schema", runReshelve: true,
     });
     env.classes.BulkAssignPreviewModal.prototype.openAndGetValue = async () => ({ selectedFiles: [env.file] });
-    return env.plugin.commands.get("bulk-assign-type").callback();
+    return env.plugin.commands.get("bulk-assign-note-type").callback();
 }
 
 for (const operation of ["reshelve", "reassign"]) {
@@ -238,7 +238,7 @@ for (const bulk of [false, true]) {
         assert.equal(env.renames.length, 0);
         assert.equal(env.folders.length, 0);
         assert.equal(env.errors.length, 0);
-        if (bulk) assert.match(env.notices.at(-1), /Assigned type to 0 file.*skipped 1/);
+        if (bulk) assert.match(env.notices.at(-1), /Assigned note type to 0 file.*skipped 1/);
         else assert.equal(env.notices.some(notice => notice.startsWith("Assigned to")), false);
     });
 }

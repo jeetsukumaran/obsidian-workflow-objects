@@ -22,8 +22,8 @@ interface FieldEntry {
 }
 
 /** Result handed back to the command when the user confirms */
-export interface CloneObjectTypeResult {
-    /** The name the user typed for the new object type */
+export interface CloneNoteTypeResult {
+    /** The name the user typed for the new note type */
     newName: string;
     /**
      * Fields to write into the clone, in the order the user left them.
@@ -37,18 +37,18 @@ export interface CloneObjectTypeResult {
 // ── Modal ──────────────────────────────────────────────────────────────────
 
 /**
- * Modal for cloning an existing object type (fileClass).
+ * Modal for cloning an existing note type (fileClass).
  *
  * Presents:
- *  • A name input with live collision-checking against existing type names.
+ *  • A name input with live collision-checking against existing note type names.
  *  • A draggable, reorderable field list where each row can be:
  *      – included/excluded via checkbox
  *      – renamed via an inline text input
  *      – reordered via drag-and-drop OR ↑/↓ buttons
  *
- * On confirm, returns a {@link CloneObjectTypeResult} via `openAndGetValue()`.
+ * On confirm, returns a {@link CloneNoteTypeResult} via `openAndGetValue()`.
  */
-export class CloneObjectTypeModal extends Modal {
+export class CloneNoteTypeModal extends Modal {
     private sourceName: string;
     private existingNames: string[];
     private entries: FieldEntry[];
@@ -56,7 +56,7 @@ export class CloneObjectTypeModal extends Modal {
     // live state
     private newName = "";
     private submitted = false;
-    private onSubmit: ((result: CloneObjectTypeResult | null) => void) | null = null;
+    private onSubmit: ((result: CloneNoteTypeResult | null) => void) | null = null;
 
     // DOM refs for live re-render
     private nameInputEl: HTMLInputElement | null = null;
@@ -67,11 +67,11 @@ export class CloneObjectTypeModal extends Modal {
         app: App,
         sourceName: string,
         sourceFields: FieldDefinition[],
-        existingTypeNames: string[]
+        existingNoteTypeNames: string[]
     ) {
         super(app);
         this.sourceName = sourceName;
-        this.existingNames = existingTypeNames.map((n) => n.toLowerCase());
+        this.existingNames = existingNoteTypeNames.map((n) => n.toLowerCase());
         this.newName = sourceName + "-copy";
 
         // Build working entries from source fields, assigning fresh IDs
@@ -91,9 +91,9 @@ export class CloneObjectTypeModal extends Modal {
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.addClass("clone-object-type-modal");
+        contentEl.addClass("clone-note-type-modal");
 
-        contentEl.createEl("h2", { text: "Clone object type" });
+        contentEl.createEl("h2", { text: "Clone note type" });
         contentEl.createEl("p", {
             text: `Source: ${this.sourceName}`,
             cls: "clone-source-label",
@@ -127,7 +127,7 @@ export class CloneObjectTypeModal extends Modal {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    openAndGetValue(): Promise<CloneObjectTypeResult | null> {
+    openAndGetValue(): Promise<CloneNoteTypeResult | null> {
         return new Promise((resolve) => {
             this.onSubmit = resolve;
             this.open();
@@ -141,7 +141,7 @@ export class CloneObjectTypeModal extends Modal {
 
         new Setting(parent)
             .setName("Name")
-            .setDesc("Must be unique — no two object types can share a name.")
+            .setDesc("Must be unique — no two note types can share a name.")
             .addText((text) => {
                 this.nameInputEl = text.inputEl;
                 text.setValue(this.newName)
@@ -319,7 +319,7 @@ export class CloneObjectTypeModal extends Modal {
                 }
             });
 
-            // ── Type badge ───────────────────────────────────────────────────
+            // ── Field type badge ───────────────────────────────────────────────────
             rowEl.createSpan({
                 cls: "clone-field-type-badge",
                 text: entry.type,
@@ -346,10 +346,10 @@ export class CloneObjectTypeModal extends Modal {
         const name = this.newName.trim();
         if (!name) return "Name cannot be empty.";
         if (name.toLowerCase() === this.sourceName.toLowerCase()) {
-            return "Name must differ from the source type.";
+            return "Name must differ from the source note type.";
         }
         if (this.existingNames.includes(name.toLowerCase())) {
-            return `An object type named "${name}" already exists.`;
+            return `A note type named "${name}" already exists.`;
         }
         return null;
     }
@@ -385,7 +385,7 @@ export class CloneObjectTypeModal extends Modal {
 
     // ── Result builder ────────────────────────────────────────────────────────
 
-    private buildResult(): CloneObjectTypeResult {
+    private buildResult(): CloneNoteTypeResult {
         const included = this.entries.filter((e) => e.included);
 
         const fields: FieldDefinition[] = included.map((e) => ({
